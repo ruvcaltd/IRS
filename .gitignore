@@ -1,6 +1,14 @@
-# Secrets
+# Secrets and Environment
 .env
+.env.local
+.env.*.local
 !.env.template
+
+# Development Configuration Files with Secrets
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Test.json
+**/*.user
 
 # .NET
 **/bin/
@@ -25,3 +33,8 @@ docker-compose.override.yml
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
+logs/
+.env.*.log

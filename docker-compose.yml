@@ -3,14 +3,12 @@ services:
   # SQL Server Express 2022
   # ──────────────────────────────────────────────
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-cu13
     container_name: sqlserver
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Express"
       MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
-    ports:
-      - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     networks:
@@ -48,11 +46,12 @@ services:
     build:
       context: ./src/dotnet-api
       dockerfile: Dockerfile
+      target: final
     container_name: dotnet-api
     environment:
-      ASPNETCORE_ENVIRONMENT: "Development"
-      ASPNETCORE_URLS: "http://0.0.0.0:5000"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://0.0.0.0:8080"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=True;"
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: "${JWT_ISSUER}"
       Jwt__Audience: "${JWT_AUDIENCE}"
@@ -62,17 +61,18 @@ services:
       Encryption__Key: "${ENCRYPTION_KEY}"
       Encryption__IV: "${ENCRYPTION_IV}"
     ports:
-      - "5000:5000"
+      - "5000:8080"
     depends_on:
       db-deploy:
         condition: service_completed_successfully
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5            
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s            
 
   # ──────────────────────────────────────────────
   # Python Flask API
@@ -83,7 +83,7 @@ services:
       dockerfile: Dockerfile
     container_name: flask-api
     environment:
-      FLASK_ENV: "development"
+      FLASK_ENV: "production"
       DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=sqlserver;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
       JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
       JWT_ISSUER: "${JWT_ISSUER}"
@@ -97,10 +97,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # ──────────────────────────────────────────────
   # Angular UI

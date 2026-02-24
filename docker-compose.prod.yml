@@ -1,0 +1,62 @@
+# Production Docker Compose Override
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+version: '3.8'
+
+services:
+  # In production, database should NOT be exposed to external networks
+  sqlserver:
+    ports: []  # Override: remove port exposure
+    environment:
+      MSSQL_ENABLE_HADR: 1  # Optional: enable high availability
+    restart: always
+
+  db-deploy:
+    restart: "no"  # Run once and exit
+
+  dotnet-api:
+    restart: always
+    environment:
+      # These override dev settings
+      ASPNETCORE_ENVIRONMENT: "Production"
+    # In production, expose through load balancer/reverse proxy only
+    ports: []  # Remove direct port exposure, use load balancer
+    labels:
+      - "com.app.tier=backend"
+      - "com.app.service=api"
+
+  flask-api:
+    restart: always
+    environment:
+      FLASK_ENV: "production"
+    ports: []  # Remove direct port exposure, use load balancer
+    labels:
+      - "com.app.tier=backend"
+      - "com.app.service=finance-api"
+
+  angular-ui:
+    restart: always
+    # In production with load balancer, expose only through ingress
+    ports:
+      - "80:80"  # Keep for load balancer/reverse proxy
+    labels:
+      - "com.app.tier=frontend"
+      - "com.app.service=ui"
+
+# Production-specific volumes configuration
+volumes:
+  sqlserver-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/sqlserver  # Use persistent volume in production
+
+networks:
+  app-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1450  # For cloud environments
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
