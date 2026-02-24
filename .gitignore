@@ -1,0 +1,27 @@
+# Secrets
+.env
+!.env.template
+
+# .NET
+**/bin/
+**/obj/
+*.user
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Angular
+node_modules/
+dist/
+.angular/
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vs/
+.idea/
+*.swp
+*.swo

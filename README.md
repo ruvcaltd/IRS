@@ -1,0 +1,239 @@
+# Dockerized Multi-Service Web Application
+
+A sample implementation demonstrating a multi-service architecture with Angular frontend, .NET Core API, Flask API, and SQL Server Express, all running in Docker containers.
+
+## Architecture
+
+- **Angular UI** (Port 4203) - Frontend application
+- **.NET Core API** (Port 5000) - Main API service
+- **Flask API** (Port 5001) - Python microservice
+- **SQL Server Express** (Port 1433) - Database
+
+## Features
+
+### 1. Hello World Pi Example
+- Flask API provides a `/api/pi/hello` endpoint that calculates and returns Pi
+- .NET API calls Flask API at `/api/pi/hello`
+- Angular UI displays the Pi value from .NET API
+
+### 2. User Management
+- .NET API provides CRUD operations for users
+- Endpoints:
+  - `GET /api/users` - Get all users
+  - `GET /api/users/{id}` - Get user by ID
+  - `POST /api/users` - Create new user
+  - `PUT /api/users/{id}` - Update user
+  - `DELETE /api/users/{id}` - Delete user
+- Angular UI provides a user management interface
+
+## Prerequisites
+
+- Docker Desktop (Windows/Mac) or Docker Engine (Linux)
+- Docker Compose
+- .NET 9 SDK (for local development)
+- Node.js 22+ (for local development)
+- Python 3.12+ (for local development)
+
+## Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
+git clone <repo-url>
+cd DockerWorflows
+```
+
+### 2. Configure Environment Variables
+
+Copy the environment template and fill in the values:
+
+```bash
+cp .env.template .env
+```
+
+Edit `.env` file with your secrets:
+
+```env
+SA_PASSWORD=YourStr0ng!Passw0rd
+DB_NAME=MyAppDb
+JWT_SECRET_KEY=your-secret-key-minimum-32-characters-long
+JWT_ISSUER=MyApp
+JWT_AUDIENCE=MyApp
+DOTNET_API_BASE_URL=http://localhost:5000
+FLASK_API_BASE_URL=http://localhost:5001
+```
+
+### 3. Create Database Schema
+
+First, you'll need to set up the database schema. For this sample, you can manually create the Users table:
+
+```sql
+CREATE TABLE [dbo].[Users]
+(
+    [Id]        INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [UserName]  NVARCHAR(200)     NOT NULL,
+    [CreatedAt] DATETIME2         NOT NULL DEFAULT GETUTCDATE()
+);
+```
+
+Or use the SQL file in `src/database/Tables/dbo.Users.sql` with SSDT tools.
+
+### 4. Start the Application
+
+```bash
+docker compose up --build
+```
+
+This will:
+1. Start SQL Server Express
+2. Start .NET API
+3. Start Flask API
+4. Start Angular UI
+
+### 5. Access the Application
+
+- **Angular UI**: http://localhost:4203
+- **.NET API Swagger**: http://localhost:5000/swagger
+- **Flask API Swagger**: http://localhost:5001/swagger  
+  (spec is served from `/swagger.json`, and the API is served from the `yahoo_app` module; make sure you start the service using that module so all routes are registered)
+- **SQL Server**: localhost,1433
+
+## Development Workflow
+
+### Hot Reload Development
+
+The `docker-compose.override.yml` file enables hot reload for all services:
+
+```bash
+docker compose up
+```
+
+Changes to source files will automatically reload:
+- Angular: Hot reload via `ng serve`
+- .NET API: Hot reload via `dotnet watch`
+- Flask API: Hot reload via `flask run --reload`
+
+### Regenerate NSwag Client
+
+After making changes to the .NET API, regenerate the Angular client:
+
+```bash
+cd src/angular-ui
+npm run generate-api
+```
+
+## Project Structure
+
+```
+/
+├── docker-compose.yml              # Production compose definition
+├── docker-compose.override.yml     # Dev overrides (hot-reload)
+├── .env.template                   # Environment template
+├── .env                            # Actual secrets (gitignored)
+│
+├── src/
+│   ├── angular-ui/                 # Angular frontend
+│   ├── dotnet-api/                 # .NET Core API
+│   ├── flask-api/                  # Flask API
+│   └── database/                   # Database schema
+│
+└── tools/                          # Build/deployment tools
+```
+
+## API Endpoints
+
+### .NET API
+
+- `GET /api/pi/hello` - Calls Flask API and returns Pi value
+- `GET /api/users` - Get all users
+- `GET /api/users/{id}` - Get user by ID
+- `POST /api/users` - Create user
+- `PUT /api/users/{id}` - Update user
+- `DELETE /api/users/{id}` - Delete user
+- `GET /health` - Health check
+
+### Flask API
+
+- `GET /api/pi/hello` - Returns hello world message with Pi value
+- `GET /health` - Health check
+
+This service also hosts a rich Yahoo Finance‑based REST API with numerous endpoints (e.g. `/price/{symbol}`, `/quote/{symbol}`, `/compare`, `/macro`, `/fx`, `/flows/{symbol}`, `/history/{symbol}`, `/fundamentals/{symbol}`, `/news/{symbol}`, `/search/{query}`, `/options/{symbol}`, `/dividends/{symbol}`, `/ratings/{symbol}`, `/analysis/{symbol}`, and more).  
+Authentication uses JWT tokens obtained via `POST /login`.
+The implementation has been refactored into Flask blueprints under `src/flask-api/app/routes/finance_bp.py`; the previous monolithic `yahoo_app.py` has been slimmed to only register blueprints and serve Swagger.  This makes it easier to add new endpoints and keep the app file clean.
+You can explore all routes interactively using the built-in Swagger UI at **http://localhost:5001/swagger**.  The spec is generated dynamically from the code.
+## Testing the Implementation
+
+### Test Pi Endpoint
+
+1. Open Angular UI: http://localhost:4203
+2. Click "Get Pi Value" button
+3. You should see the Pi value displayed
+
+### Test User Management
+
+1. Navigate to Users page in Angular UI
+2. Add a new user
+3. View the list of users
+4. Delete a user
+
+### Test APIs Directly
+
+**Flask API:**
+```bash
+# service is implemented in `src/flask-api/yahoo_app.py` – everything lives under
+# that module, not the `app` package (which previously only contained two "demo"
+# blueprints).  If you run with flask, set:
+#   export FLASK_APP=yahoo_app
+# or adjust your gunicorn command accordingly.
+
+curl http://localhost:5001/api/pi/hello
+```
+**.NET API (calls Flask):**
+```bash
+curl http://localhost:5000/api/pi/hello
+```
+
+**Users API:**
+```bash
+# Get all users
+curl http://localhost:5000/api/users
+
+# Create user
+curl -X POST http://localhost:5000/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"userName": "John Doe"}'
+```
+
+## Troubleshooting
+
+### SQL Server Connection Issues
+
+Ensure SQL Server is healthy:
+```bash
+docker compose ps
+docker compose logs sqlserver
+```
+
+### Port Conflicts
+
+If ports are already in use, modify the port mappings in `docker-compose.yml`.
+
+### API Client Not Generated
+
+Run NSwag generation manually:
+```bash
+cd src/angular-ui
+npm install
+npm run generate-api
+```
+
+## Notes
+
+- The database schema should be managed through SSDT projects for production
+- EF Core entities should be scaffolded from the database
+- NSwag client should be regenerated after API changes
+- All services communicate via Docker's internal DNS
+
+## License
+
+MIT

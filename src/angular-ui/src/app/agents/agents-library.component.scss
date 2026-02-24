@@ -1,0 +1,12 @@
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.agent-card { padding: 12px; position: relative; min-height: 88px; }
+
+/* truncate overflowing text cleanly */
+.agent-card .card-title { display:flex; align-items:center; gap:8px; }
+.agent-card .card-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: calc(100% - 110px); }
+.agent-card .meta-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display:block; color:var(--muted-text); margin-top:6px; }
+.agent-card .muted { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; margin-top:8px; color:var(--muted-text); }
+
+/* action buttons in top-right of card */
+.agent-card .card-actions { margin-left: auto; display:flex; gap:8px; }
+.agent-card .card-actions .btn { font-size:12px; padding:6px 8px; height:28px; }

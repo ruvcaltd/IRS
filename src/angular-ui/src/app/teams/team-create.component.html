@@ -1,0 +1,29 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Teams</p>
+      <h1>Create a team</h1>
+      <p class="muted">Name your team so analysts recognize its scope.</p>
+    </div>
+  </div>
+
+  <div class="surface card">
+    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="stack">
+      <label class="stack">
+        <span class="label">Team name</span>
+        <input class="input" type="text" formControlName="name" placeholder="e.g., Research Alpha" />
+      </label>
+      <div class="error" *ngIf="form.controls['name'].invalid && (form.controls['name'].dirty || form.controls['name'].touched)">
+        <p *ngIf="form.controls['name'].errors?.['required']">Name is required.</p>
+        <p *ngIf="form.controls['name'].errors?.['minlength']">Name must be at least 2 characters.</p>
+      </div>
+
+      <div class="row wrap" style="margin-top: 8px;">
+        <button type="submit" [disabled]="form.invalid || isSubmitting()" class="btn">Create team</button>
+        <a routerLink="/teams" class="btn secondary">Back to teams</a>
+      </div>
+    </form>
+
+    <p *ngIf="error()" class="error" style="margin-top: 12px;">{{ error() }}</p>
+  </div>
+</div>

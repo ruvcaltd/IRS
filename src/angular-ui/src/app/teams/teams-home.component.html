@@ -1,0 +1,32 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Teams</p>
+      <h1>My Teams</h1>
+      <p class="muted">Manage the research squads you belong to.</p>
+    </div>
+    <div class="row wrap">
+      <a routerLink="/teams/create" class="btn">Create Team</a>
+      <a routerLink="/teams/search" class="btn secondary">Search Teams</a>
+    </div>
+  </div>
+
+  <div *ngIf="isLoading()" class="status">Loading teams...</div>
+  <div *ngIf="error()" class="error">{{ error() }}</div>
+
+  <div class="surface card" *ngIf="!isLoading() && !error() && teams().length > 0">
+    <ul class="list">
+      <li *ngFor="let t of teams(); trackBy: trackByTeam" class="panel surface space-between">
+        <div>
+          <div class="card-title">{{ t.name }}</div>
+          <div class="meta-text" *ngIf="t.current_user_role">Your role: {{ t.current_user_role }}</div>
+        </div>
+        <a [routerLink]="['/teams', t.id]" class="btn secondary">Open</a>
+      </li>
+    </ul>
+  </div>
+
+  <div *ngIf="!isLoading() && !error() && teams().length === 0" class="empty-state">
+    You are not a member of any teams yet. Create one or request to join an existing team.
+  </div>
+</div>

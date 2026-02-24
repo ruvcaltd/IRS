@@ -1,0 +1,14 @@
+/runtime:NetCore31
+/input:https://localhost:5001/swagger/v1/swagger.json
+/output:../ClientApp/src/generated/generated/irs-api.client.ts
+/classname:IrsApiClient
+/modulename:irs-api.client
+/generateinterfaces:true
+/generateclient:true
+/supportconstructor:true
+/generatebaseurl:true
+/clientbaseclass:
+/language:TypeScript
+/httpclass:HttpClient
+/promisetype:Promise
+/typescriptversion:4.3

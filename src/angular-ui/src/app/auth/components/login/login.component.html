@@ -1,0 +1,57 @@
+<div class="login-container">
+  <div class="login-card">
+    <h1>Login</h1>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          placeholder="Enter your email"
+          [class.is-invalid]="isSubmitted && email?.invalid"
+        />
+        <div *ngIf="isSubmitted && email?.invalid" class="error-messages">
+          <p *ngFor="let error of getEmailErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
+          placeholder="Enter your password"
+          [class.is-invalid]="isSubmitted && password?.invalid"
+        />
+        <div *ngIf="isSubmitted && password?.invalid" class="error-messages">
+          <p *ngFor="let error of getPasswordErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- General Error Message -->
+      <div *ngIf="error()" class="alert alert-error">
+        {{ error() }}
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="btn btn-primary"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Logging in...' : 'Login' }}
+      </button>
+    </form>
+
+    <!-- Register Link -->
+    <p class="register-link">
+      Don't have an account?
+      <a routerLink="/register">Register here</a>
+    </p>
+  </div>
+</div>

@@ -1,0 +1,87 @@
+<div class="register-container">
+  <div class="register-card">
+    <h1>Register</h1>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          placeholder="Enter your email"
+          [class.is-invalid]="isSubmitted && email?.invalid"
+        />
+        <div *ngIf="isSubmitted && email?.invalid" class="error-messages">
+          <p *ngFor="let error of getEmailErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Full Name Field -->
+      <div class="form-group">
+        <label for="fullName">Full Name</label>
+        <input
+          id="fullName"
+          type="text"
+          formControlName="fullName"
+          placeholder="Enter your full name"
+          [class.is-invalid]="isSubmitted && fullName?.invalid"
+        />
+        <div *ngIf="isSubmitted && fullName?.invalid" class="error-messages">
+          <p *ngFor="let error of getFullNameErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
+          placeholder="Enter your password"
+          [class.is-invalid]="isSubmitted && password?.invalid"
+        />
+        <div *ngIf="isSubmitted && password?.invalid" class="error-messages">
+          <p *ngFor="let error of getPasswordErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Confirm Password Field -->
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input
+          id="confirmPassword"
+          type="password"
+          formControlName="confirmPassword"
+          placeholder="Confirm your password"
+          [class.is-invalid]="isSubmitted && (confirmPassword?.invalid || registerForm.errors?.['passwordMismatch'])"
+        />
+        <div *ngIf="isSubmitted && (confirmPassword?.invalid || registerForm.errors?.['passwordMismatch'])" class="error-messages">
+          <p *ngFor="let error of getConfirmPasswordErrors()">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- General Error Message -->
+      <div *ngIf="error()" class="alert alert-error">
+        {{ error() }}
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="btn btn-primary"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Registering...' : 'Register' }}
+      </button>
+    </form>
+
+    <!-- Login Link -->
+    <p class="login-link">
+      Already have an account?
+      <a routerLink="/login">Login here</a>
+    </p>
+  </div>
+</div>

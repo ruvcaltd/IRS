@@ -1,0 +1,75 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">My Research</p>
+      <h1>Research pages visible to me</h1>
+      <p class="muted">Pages from teams where you are an ACTIVE member.</p>
+    </div>
+    <div class="row wrap">
+      <button class="btn primary" (click)="recalculateScores()">Recalculate Scores</button>
+      <a routerLink="/research" class="btn secondary">Create new</a>
+    </div>
+  </div>
+
+  <div class="search-bar" *ngIf="!isLoading() && !error()">
+    <input
+      type="text"
+      placeholder="Search by ticker, name, or FIGI…"
+      (input)="onSearch($event.target.value)"
+      class="search-input"
+    />
+  </div>
+
+  <div *ngIf="isLoading()" class="status">Loading…</div>
+  <div *ngIf="error()" class="error">{{ error() }}</div>
+
+  <section class="grid" *ngIf="!isLoading() && !error()">
+    <article class="result-card surface clickable" *ngFor="let item of items(); trackBy: trackByItem" (click)="open(item)">
+      <header class="space-between align-start">
+        <div>
+          <div class="ticker">{{ item.security_ticker ?? '—' }}</div>
+          <h3>{{ item.security_name }}</h3>
+          <app-score-indicator 
+              [fundamentalScore]="item.fundamental_score" 
+              [convictionScore]="item.conviction_score">
+          </app-score-indicator>
+          <p class="meta-text">FIGI: {{ item.security_figi }}</p>
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn run" title="Run all agents" aria-label="Run all agents" (click)="runAllAgents(item); $event.stopPropagation()">
+            <!-- play icon -->
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+
+          <button class="icon-btn delete" title="Delete research" aria-label="Delete research" (click)="deleteResearch(item); $event.stopPropagation()">
+            <!-- clearer trash icon (trash-2) -->
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+              <path d="M8 6l1-3h6l1 3"></path>
+            </svg>
+          </button>
+
+          <div class="pill">{{ item.security_type ?? 'Instrument' }}</div>
+        </div>
+      </header>
+      <div class="meta-grid">
+        <div><span class="meta-label">Fundamental:</span><span class="meta-value">{{ item.fundamental_score ?? '—' }}</span></div>
+        <div><span class="meta-label">Conviction: </span><span class="meta-value">{{ item.conviction_score ?? '—' }}</span></div>
+      </div>
+      <div class="last-updated" style="font-size: x-small; margin-top: 8px;" class="text-muted">
+        <span class="meta-label">Updated:</span>
+        <span class="meta-value">{{ item.last_updated ? (item.last_updated | date:'short') : '—' }}</span>
+      </div>
+    </article>
+  </section>
+
+  <app-confirm-modal *ngIf="confirmState()"
+    [title]="'Delete research page'"
+    [message]="'Delete research page for ' + (confirmState()?.item?.security_ticker || confirmState()?.item?.security_name) + '? This will remove all associated agents and runs.'"
+    (confirm)="confirmDeleteResearch()"
+    (cancel)="cancelConfirm()"></app-confirm-modal>
+
+</div>

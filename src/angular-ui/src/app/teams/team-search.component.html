@@ -1,0 +1,36 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Teams</p>
+      <h1>Search teams</h1>
+      <p class="muted">Find a team and request access.</p>
+    </div>
+  </div>
+
+  <div class="surface card stack">
+    <div class="row wrap" style="gap: 12px;">
+      <input [(ngModel)]="query" type="text" class="input" placeholder="Search by team name..." />
+      <button (click)="onSearch()" class="btn">Search</button>
+    </div>
+
+    <div *ngIf="isLoading()" class="status">Searching...</div>
+    <div *ngIf="error()" class="error">{{ error() }}</div>
+    <div *ngIf="notice()" class="notice">{{ notice() }}</div>
+
+    <div *ngIf="!isLoading() && results().length > 0">
+      <ul class="list" style="margin-top: 10px;">
+        <li *ngFor="let t of results(); trackBy: trackByTeam" class="panel surface space-between">
+          <div>
+            <div class="card-title">{{ t.name }}</div>
+            <div class="meta-text">Request access to collaborate.</div>
+          </div>
+          <button class="btn secondary" (click)="requestJoin(t.id!)">Request join</button>
+        </li>
+      </ul>
+    </div>
+
+    <div *ngIf="!isLoading() && results().length === 0 && !error() && notice()" class="empty-state">
+      No teams match that search yet.
+    </div>
+  </div>
+</div>

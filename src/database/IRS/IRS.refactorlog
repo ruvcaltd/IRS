@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Operations Version="1.0" xmlns="http://schemas.microsoft.com/sqlserver/dac/Serialization/2012/02">
+  <Operation Name="Rename Refactor" Key="2df745c7-1f56-40b8-a4d9-6ba4e6db3657" ChangeDateTime="01/23/2026 13:41:04">
+    <Property Name="ElementName" Value="[dbo].[Securities].[figi_source]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[Securities]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="exchange_code" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="b416bd57-4716-44c6-b0a7-43e6ace215ed" ChangeDateTime="01/23/2026 13:42:56">
+    <Property Name="ElementName" Value="[dbo].[Securities].[sector]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[Securities]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="marketSector" />
+  </Operation>
+  <Operation Name="Rename Refactor" Key="8d07b523-c8ba-432e-87ae-302bee0884b8" ChangeDateTime="01/23/2026 13:43:10">
+    <Property Name="ElementName" Value="[dbo].[Securities].[marketSector]" />
+    <Property Name="ElementType" Value="SqlSimpleColumn" />
+    <Property Name="ParentElementName" Value="[dbo].[Securities]" />
+    <Property Name="ParentElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="market_sector" />
+  </Operation>
+</Operations>

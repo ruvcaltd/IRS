@@ -1,0 +1,87 @@
+<div class="page research-page">
+  <div class="hero surface">
+    <div>
+      <p class="eyebrow">Research Workspace</p>
+      <h1>Spin up a research page in two steps.</h1>
+      <p class="muted">Search OpenFIGI, pick the team, and let the Structure Agent scaffold sections instantly.</p>
+      <div class="quick-facts">
+        <div>
+          <span class="pill">Isolated</span>
+          <p class="meta-text">Each team keeps its own pages and agent runs.</p>
+        </div>
+        <div>
+          <span class="pill">BYOK-ready</span>
+          <p class="meta-text">Secrets mount per team before Python execution.</p>
+        </div>
+        <div>
+          <span class="pill">Scores</span>
+          <p class="meta-text">Fundamental (-3..3) and Conviction (0..5) per section.</p>
+        </div>
+      </div>
+    </div>
+    <div class="hero-panel surface">
+      <div class="card-title">Create a research page</div>
+      <form [formGroup]="form" (ngSubmit)="onSearch()" class="stack" novalidate>
+        <label class="stack">
+          <span class="label">Team</span>
+          <select class="input" formControlName="teamId">
+            <option *ngFor="let team of teams(); trackBy: trackByTeam" [value]="team.id">{{ team.name }}</option>
+          </select>
+        </label>
+        <label class="stack">
+          <span class="label">Search OpenFIGI</span>
+          <div class="search-row">
+            <input class="input" type="text" formControlName="query" placeholder="e.g., AAPL or Apple" />
+            <button type="submit" class="btn" [disabled]="isSearching() || form.get('query')?.invalid">{{ isSearching() ? 'Searching...' : 'Search' }}</button>
+          </div>
+          <small class="meta-text">We query OpenFIGI; select the right instrument type.</small>
+        </label>
+      </form>
+      <div class="status" *ngIf="isLoadingTeams()">Loading your teams…</div>
+      <div class="error" *ngIf="error()">{{ error() }}</div>
+      <div class="notice" *ngIf="notice()">{{ notice() }}</div>
+    </div>
+  </div>
+
+  <section class="results" aria-live="polite">
+    <div class="results-header space-between">
+      <div>
+        <div class="card-title">Search results</div>
+        <p class="meta-text">Select a security to create a research page for the chosen team.</p>
+      </div>
+      <div class="pill" *ngIf="searchResults().length > 0">{{ searchResults().length }} instruments</div>
+    </div>
+
+    <div class="grid" *ngIf="searchResults().length > 0">
+      <article class="result-card surface sections" *ngFor="let security of searchResults(); trackBy: trackBySecurity">
+        <header class="space-between align-start">
+          <div>
+            <div class="ticker">{{ security.ticker || '—' }}</div>
+            <h3>{{ security.name }}</h3>
+            <p class="meta-text">FIGI: {{ security.figi }}</p>
+          </div>
+          <div class="pill">{{ security.security_type || 'Unknown' }}</div>
+        </header>
+        <p class="meta-text">Sector: {{ security.market_sector || 'Not provided' }}</p>
+        <div class="meta-grid">
+          <div><span class="meta-label">Type</span><span class="meta-value">{{ security.security_type || '—' }}</span></div>          
+          <div><span class="meta-label">Exchange</span><span class="meta-value">{{ security.exchange_code || '—' }}</span></div>         
+          <div><span class="meta-label">MIC</span><span class="meta-value">{{ security.mic_code || '—' }}</span></div>         
+          <div><span class="meta-label">Composite FIGI</span><span class="meta-value">{{ security.composite_figi || '—' }}</span></div>
+          <div><span class="meta-label">Share Class FIGI</span><span class="meta-value">{{ security.share_class_figi || '—' }}</span></div>
+          <div><span class="meta-label">Type 2</span><span class="meta-value">{{ security.security_type2 || '—' }}</span></div>
+        </div>
+        <p class="meta-text" *ngIf="security.security_description">{{ security.security_description }}</p>
+        <div class="card-actions">
+          <button class="btn" (click)="createPage(security)" [disabled]="creatingFigi() === security.figi">
+            {{ creatingFigi() === security.figi ? 'Creating…' : 'Create research page' }}
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="empty-state" *ngIf="!isSearching() && searchResults().length === 0 && !error()">
+      Search for a security to begin. The Structure Agent will auto-create sections like Business, Risks, ESG, and Financial Health.
+    </div>
+  </section>
+</div>

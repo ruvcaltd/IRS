@@ -1,0 +1,50 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Dashboard</p>
+      <h1>Welcome back{{ user()?.fullName ? ', ' + user()?.fullName : '' }}.</h1>
+      <p class="muted">Track research teams and manage access in one place.</p>
+    </div>
+    <div class="row wrap">
+      <a routerLink="/teams/create" class="btn">Create Team</a>
+      <a routerLink="/teams" class="btn secondary">View Teams</a>
+    </div>
+  </div>
+
+  <section class="grid-2">
+    <div class="surface card">
+      <div class="card-title">Getting Started</div>
+      <p class="muted">Create a team to onboard collaborators, then approve join requests.</p>
+      <div class="row" style="margin-top: 12px; gap: 10px; flex-wrap: wrap;">
+        <a routerLink="/teams/create" class="btn">New Team</a>
+        <a routerLink="/teams/search" class="btn secondary">Find a Team</a>
+      </div>
+    </div>
+    <div class="surface card">
+      <div class="card-title">Tips</div>
+      <ul class="list">
+        <li class="panel surface space-between">
+          <div>
+            <div class="card-title">Stay organized</div>
+            <div class="meta-text">Use clear team names and roles.</div>
+          </div>
+          <span class="pill">Admin</span>
+        </li>
+        <li class="panel surface space-between">
+          <div>
+            <div class="card-title">Keep access current</div>
+            <div class="meta-text">Approve or reject pending requests promptly.</div>
+          </div>
+          <span class="pill">Members</span>
+        </li>
+        <li class="panel surface space-between">
+          <div>
+            <div class="card-title">Review visibility</div>
+            <div class="meta-text">Use read-only roles for view-only collaborators.</div>
+          </div>
+          <span class="pill">Read-only</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+</div>

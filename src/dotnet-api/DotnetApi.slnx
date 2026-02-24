@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IRS.Api.IntegrationTests/IRS.Api.IntegrationTests.csproj" />
+    <Project Path="src/IRS.Api/IRS.Api.csproj" />
+    <Project Path="src/IRS.Application/IRS.Application.csproj" />
+    <Project Path="src/IRS.ClientGeneration.Tests/IRS.ClientGeneration.Tests.csproj" />
+    <Project Path="src/IRS.Domain/IRS.Domain.csproj" />
+    <Project Path="src/IRS.Infrastructure/IRS.Infrastructure.csproj" />
+    <Project Path="src/IRS.LLM/IRS.LLM.csproj" />
+  </Folder>
+</Solution>

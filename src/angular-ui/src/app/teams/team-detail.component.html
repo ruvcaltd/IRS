@@ -1,0 +1,64 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Team</p>
+      <h1>Team {{ teamId }}</h1>
+      <p class="muted">Collaborators and access.</p>
+    </div>
+    <div class="row wrap">
+      <span *ngIf="role()" class="pill">Your role: {{ role() }}</span>
+      <a *ngIf="isAdmin()" routerLink="/teams/{{teamId}}/agents" class="btn">Agent Library</a>
+      <a routerLink="/teams" class="btn secondary">Back to teams</a>
+    </div>
+  </div>
+
+  <section class="surface card stack">
+    <div class="space-between">
+      <div>
+        <div class="card-title">Members</div>
+        <div class="meta-text">Active collaborators in this team.</div>
+      </div>
+      <span class="pill">{{ members().length }} total</span>
+    </div>
+
+    <div *ngIf="isLoadingMembers()" class="status">Loading members...</div>
+    <div *ngIf="error()" class="error">{{ error() }}</div>
+
+    <ul *ngIf="!isLoadingMembers() && !error()" class="list" style="margin-top: 8px;">
+      <li *ngFor="let m of members(); trackBy: trackByUser" class="panel surface space-between">
+        <div>
+          <div class="card-title">{{ m.user_full_name }}</div>
+          <div class="meta-text">{{ m.user_email }}</div>
+        </div>
+        <span class="pill">{{ m.team_role_name }} <span *ngIf="m.status">• {{ m.status }}</span></span>
+      </li>
+    </ul>
+  </section>
+
+  <section *ngIf="isAdmin()" class="surface card stack" style="margin-top: 16px;">
+    <div class="space-between">
+      <div>
+        <div class="card-title">Pending requests</div>
+        <div class="meta-text">Approve or reject access.</div>
+      </div>
+      <span class="pill">{{ pending().length }} pending</span>
+    </div>
+
+    <div *ngIf="isLoadingPending()" class="status">Loading pending requests...</div>
+
+    <ul *ngIf="!isLoadingPending() && pending().length > 0" class="list">
+      <li *ngFor="let p of pending(); trackBy: trackByUser" class="panel surface space-between">
+        <div>
+          <div class="card-title">{{ p.user_full_name }}</div>
+          <div class="meta-text">{{ p.user_email }}</div>
+        </div>
+        <div class="row wrap" style="gap: 8px;">
+          <button class="btn secondary" (click)="approve(p.user_id!, 2)">Approve: Contributor</button>
+          <button class="btn secondary" (click)="approve(p.user_id!, 3)">Approve: ReadOnly</button>
+          <button class="btn danger" (click)="reject(p.user_id!)">Reject</button>
+        </div>
+      </li>
+    </ul>
+    <p *ngIf="!isLoadingPending() && pending().length === 0" class="status">No pending requests.</p>
+  </section>
+</div>

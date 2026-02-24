@@ -1,0 +1,88 @@
+2026-01-22 11:53:36	This log contains information about the import schema operation into project 'IRS' on computer 'CUSTOM-PC' by user 'shiva'.
+2026-01-22 11:53:36	Import of database schema has started.
+2026-01-22 11:53:41	Gathering database credentials
+2026-01-22 11:53:41	Gathering database options
+2026-01-22 11:53:41	Gathering generic database scoped configuration option
+2026-01-22 11:53:41	Gathering users
+2026-01-22 11:53:41	Gathering roles
+2026-01-22 11:53:41	Gathering application roles
+2026-01-22 11:53:41	Gathering role memberships
+2026-01-22 11:53:41	Gathering filegroups
+2026-01-22 11:53:41	Gathering full-text catalogs
+2026-01-22 11:53:41	Gathering assemblies
+2026-01-22 11:53:41	Gathering certificates
+2026-01-22 11:53:41	Gathering asymmetric keys
+2026-01-22 11:53:41	Gathering symmetric keys
+2026-01-22 11:53:41	Gathering encrypted symmetric keys
+2026-01-22 11:53:41	Gathering schemas
+2026-01-22 11:53:41	Gathering XML schema collections
+2026-01-22 11:53:41	Gathering user-defined data types
+2026-01-22 11:53:41	Gathering user-defined types
+2026-01-22 11:53:41	Gathering table types
+2026-01-22 11:53:41	Gathering unique keys for table types
+2026-01-22 11:53:41	Gathering primary keys for table types
+2026-01-22 11:53:42	Gathering indexes for table types
+2026-01-22 11:53:42	Gathering check constraints for table types
+2026-01-22 11:53:42	Gathering default constraints for table types
+2026-01-22 11:53:42	Gathering partition functions
+2026-01-22 11:53:42	Gathering partition schemes
+2026-01-22 11:53:42	Gathering functions
+2026-01-22 11:53:42	Gathering encrypted functions
+2026-01-22 11:53:42	Gathering aggregates
+2026-01-22 11:53:42	Gathering procedures
+2026-01-22 11:53:42	Gathering encrypted procedures
+2026-01-22 11:53:42	Gathering tables
+2026-01-22 11:53:42	Gathering primary keys
+2026-01-22 11:53:42	Gathering unique constraints
+2026-01-22 11:53:42	Gathering foreign keys
+2026-01-22 11:53:42	Gathering default constraints
+2026-01-22 11:53:42	Gathering check constraints
+2026-01-22 11:53:42	Gathering views
+2026-01-22 11:53:42	Gathering encrypted views
+2026-01-22 11:53:42	Gathering indexes
+2026-01-22 11:53:42	Gathering statistics
+2026-01-22 11:53:42	Gathering full-text index stoplists
+2026-01-22 11:53:42	Gathering search property lists
+2026-01-22 11:53:42	Gathering search properties
+2026-01-22 11:53:42	Gathering full-text indexes
+2026-01-22 11:53:42	Gathering column store indexes
+2026-01-22 11:53:42	Gathering spatial indexes
+2026-01-22 11:53:42	Gathering XML indexes
+2026-01-22 11:53:42	Gathering Selective XML indexes
+2026-01-22 11:53:42	Gathering encrypted triggers
+2026-01-22 11:53:42	Gathering triggers
+2026-01-22 11:53:42	Gathering encrypted and clr ddl triggers
+2026-01-22 11:53:42	Gathering ddl triggers
+2026-01-22 11:53:42	Creating edge constraints
+2026-01-22 11:53:42	Gathering synonyms
+2026-01-22 11:53:42	Gathering defaults
+2026-01-22 11:53:42	Gathering data constraint uddt bindings
+2026-01-22 11:53:42	Gathering rules
+2026-01-22 11:53:42	Gathering data constraint uddt bindings
+2026-01-22 11:53:42	Gathering message types
+2026-01-22 11:53:42	Gathering queues
+2026-01-22 11:53:42	Gathering contracts
+2026-01-22 11:53:42	Gathering services
+2026-01-22 11:53:42	Gathering event notifications
+2026-01-22 11:53:42	Gathering remote service bindings
+2026-01-22 11:53:42	Gathering broker priorities
+2026-01-22 11:53:42	Gathering signatures
+2026-01-22 11:53:42	Gathering compression options
+2026-01-22 11:53:42	Gathering sequence types
+2026-01-22 11:53:42	Gathering security policies
+2026-01-22 11:53:42	Gather column encryption keys
+2026-01-22 11:53:42	Gathering column master keys
+2026-01-22 11:53:42	Gathering external data sources
+2026-01-22 11:53:42	Gathering external file formats
+2026-01-22 11:53:42	Gathering external tables
+2026-01-22 11:53:42	Gathering XML index compression options
+2026-01-22 11:53:42	Gathering extended properties
+2026-01-22 11:53:42	Gathering assemblies
+2026-01-22 11:53:42	Gathering credentials
+2026-01-22 11:53:42	Gathering logins
+2026-01-22 11:53:42	Gathering server audits
+2026-01-22 11:53:43	Scanning project for duplicate elements
+2026-01-22 11:53:43	Finished duplicate element processing
+2026-01-22 11:53:43	Finished importing database.
+2026-01-22 11:53:43	A summary of the import was saved to the following location: C:\Work\IRS\Database\IRS\Import Schema Logs\IRS_20260122115336.log
+2026-01-22 11:53:43	Click Finish to continue...

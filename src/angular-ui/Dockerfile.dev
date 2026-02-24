@@ -1,0 +1,22 @@
+FROM node:22-alpine
+WORKDIR /app
+
+COPY package*.json ./
+
+# install all deps (including the optional rollup binary) and make
+# sure the esbuild native addon matches the JS wrapper. also pull in the
+# musl version explicitly in case the lockfile (created on Windows) did
+# not record it.
+# need curl for the manual fetch
+RUN apk add --no-cache curl \
+    && npm ci && npm rebuild esbuild \
+    # make sure the Alpine container has the musl-specific binary from npmjs
+    && mkdir -p node_modules/@rollup/rollup-linux-x64-musl \
+    && curl -L https://registry.npmjs.org/@rollup/rollup-linux-x64-musl/-/rollup-linux-x64-musl-4.59.0.tgz \
+        | tar -xz --strip-components=1 -C node_modules/@rollup/rollup-linux-x64-musl || true
+
+COPY . .
+
+EXPOSE 4200
+CMD ["npx", "ng", "serve", "--host", "0.0.0.0", "--poll", "2000"]
+

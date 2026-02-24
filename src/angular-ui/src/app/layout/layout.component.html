@@ -1,0 +1,133 @@
+<div class="app-layout">
+  <header class="nav surface">
+    <div class="nav-brand">
+      <div class="logo-dot"></div>
+      <div>
+        <div class="brand-title">IRS Console</div>
+        <div class="meta-text">Research Platform</div>
+      </div>
+    </div>
+    <div class="nav-actions desktop-nav">
+      <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">Dashboard</a>
+      <a routerLink="/teams" routerLinkActive="active" class="nav-link">Teams</a>
+      <a routerLink="/my-research" routerLinkActive="active" class="nav-link">My Research</a>
+      <a routerLink="/research" routerLinkActive="active" class="nav-link">Research</a>
+      <button (click)="toggleTheme()" class="btn-icon" [attr.aria-label]="isDark() ? 'Switch to light mode' : 'Switch to dark mode'">
+        <svg *ngIf="!isDark()" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg *ngIf="isDark()" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+      <span *ngIf="user()" class="pill">
+        <span>{{ user()?.fullName }}</span>
+      </span>
+      <button (click)="onLogout()" class="btn ghost">Logout</button>
+    </div>
+    <button class="mobile-menu-btn" (click)="toggleMobileMenu()" [class.open]="mobileMenuOpen()" aria-label="Toggle menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </header>
+
+  <div class="mobile-backdrop" *ngIf="mobileMenuOpen()" (click)="closeMobileMenu()"></div>
+  
+  <nav class="mobile-menu" [class.open]="mobileMenuOpen()">
+    <div class="mobile-menu-header">
+      <div class="nav-brand">
+        <div class="logo-dot"></div>
+        <span class="brand-title">IRS Console</span>
+      </div>
+      <button class="btn-icon" (click)="closeMobileMenu()" aria-label="Close menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="mobile-menu-content">
+      <a routerLink="/dashboard" routerLinkActive="active" class="mobile-nav-link" (click)="closeMobileMenu()">Dashboard</a>
+      <a routerLink="/teams" routerLinkActive="active" class="mobile-nav-link" (click)="closeMobileMenu()">Teams</a>
+      <a routerLink="/my-research" routerLinkActive="active" class="mobile-nav-link" (click)="closeMobileMenu()">My Research</a>
+      <a routerLink="/research" routerLinkActive="active" class="mobile-nav-link" (click)="closeMobileMenu()">Research</a>
+      <div class="mobile-divider"></div>
+      <div class="mobile-menu-actions">
+        <button (click)="toggleTheme()" class="mobile-action">
+          <svg *ngIf="!isDark()" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg *ngIf="isDark()" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <span>{{ isDark() ? 'Light mode' : 'Dark mode' }}</span>
+        </button>
+        <span *ngIf="user()" class="mobile-user-info">
+          <span class="user-name">{{ user()?.fullName }}</span>
+          <span class="user-email">{{ user()?.email }}</span>
+        </span>
+        <button (click)="onLogout(); closeMobileMenu()" class="mobile-action logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="layout-content">
+    <div class="toast-container" *ngIf="toasts().length > 0">
+      <div class="toast" *ngFor="let t of toasts()" [class.error]="t.type==='error'" [class.success]="t.type==='success'">
+        <div class="toast-message">{{ t.message }}</div>
+        <button class="toast-close" (click)="toastService.dismiss(t.id)" aria-label="Dismiss">x</button>
+      </div>
+    </div>
+
+    <router-outlet></router-outlet>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-section">
+        <div class="footer-brand">
+          <div class="logo-dot"></div>
+          <span>IRS Console</span>
+        </div>
+        <p class="muted">Investment Research System – Collaborative platform for research teams.</p>
+      </div>
+      <div class="footer-section">
+        <div class="footer-title">Resources</div>
+        <a routerLink="/teams" class="footer-link">Teams</a>
+        <a routerLink="/dashboard" class="footer-link">Dashboard</a>
+      </div>
+      <div class="footer-section">
+        <div class="footer-title">Support</div>
+        <a href="#" class="footer-link">Documentation</a>
+        <a href="#" class="footer-link">Help Center</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="muted">© 2026 IRS Console. All rights reserved.</p>
+    </div>
+  </footer>
+</div>

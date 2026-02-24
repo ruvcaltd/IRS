@@ -1,0 +1,6 @@
+<div class="score-indicator">
+  <span *ngFor="let dot of dots" 
+        class="dot" 
+        [ngStyle]="{'background-color': getDotColor(dot)}">
+  </span>
+</div>

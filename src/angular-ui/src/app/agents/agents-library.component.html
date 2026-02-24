@@ -1,0 +1,120 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Agent Library</p>
+      <h1>Team {{ teamId }} • Agents</h1>
+      <p class="muted">Create, view, and manage REST API agents with custom AI instructions for your team.</p>
+    </div>
+    <div class="row wrap">
+      <a routerLink="/teams/{{teamId}}" class="btn secondary">Back to team</a>
+    </div>
+  </div>
+
+  <section class="surface card stack">
+    <div class="card-title">{{ editingAgentId() ? 'Edit Agent' : 'Create Agent' }}</div>
+    <div class="meta-text">Configure REST API endpoint and AI instructions. The agent will fetch data from the API and process it using custom AI prompts.</div>
+
+    <div class="form-row">
+      <input class="input" placeholder="Agent Name" [(ngModel)]="form().name" />
+    </div>
+    <div class="form-row">
+      <input class="input" placeholder="Description (optional)" [(ngModel)]="form().description" />
+    </div>
+    <div class="form-row">
+      <select class="input" [(ngModel)]="form().visibility">
+        <option>Private</option>
+        <option>Team</option>
+      </select>
+    </div>
+
+    <hr style="margin: 16px 0;">
+    <div class="meta-text" style="margin-bottom: 12px;">REST API Configuration</div>
+    
+    <div class="form-row">
+      <input class="input" placeholder="Endpoint URL (e.g., https://api.example.com/data)" [(ngModel)]="form().endpoint_url" />
+    </div>
+    <div class="form-row">
+      <select class="input" [(ngModel)]="form().http_method">
+        <option>GET</option>
+        <option>POST</option>
+        <option>PUT</option>
+        <option>PATCH</option>
+        <option>DELETE</option>
+      </select>
+      <select class="input" [(ngModel)]="form().auth_type">
+        <option>None</option>
+        <option>ApiToken</option>
+        <option>BasicAuth</option>
+        <option>UsernamePassword</option>
+      </select>
+    </div>
+
+    <div class="form-row" *ngIf="form().auth_type === 'BasicAuth' || form().auth_type === 'UsernamePassword'">
+      <input class="input" placeholder="Username" [(ngModel)]="form().username" />
+      <input class="input" type="password" placeholder="Password" [(ngModel)]="form().password" />
+      <div class="muted" *ngIf="editingAgentId() !== null" style="font-size:12px; margin-left:8px; align-self:center;">Leave blank to keep existing password</div>
+    </div>
+
+    <div class="form-row" *ngIf="form().auth_type === 'ApiToken'">
+      <input class="input" type="password" placeholder="API Token" [(ngModel)]="form().api_token" />
+      <div class="muted" *ngIf="editingAgentId() !== null" style="font-size:12px; margin-left:8px; align-self:center;">Leave blank to keep existing API token</div>
+    </div>
+
+    <div class="form-row" *ngIf="form().auth_type === 'UsernamePassword'">
+      <input class="input" placeholder="Login Endpoint URL (e.g., https://api.example.com/auth/login)" [(ngModel)]="form().login_endpoint_url" />
+    </div>
+
+    <div class="form-row" *ngIf="form().http_method === 'POST' || form().http_method === 'PUT' || form().http_method === 'PATCH'">
+      <textarea class="input" rows="4" placeholder="Request body template (use placeholders for dynamic data)" [(ngModel)]="form().request_body_template"></textarea>
+    </div>
+
+    <hr style="margin: 16px 0;">
+    <div class="meta-text" style="margin-bottom: 12px;">LLM Configuration</div>
+
+    <div class="form-row">
+      <select class="input" [(ngModel)]="form().llm_model_id">
+        <option [ngValue]="null">Select LLM Model</option>
+        <option *ngFor="let model of llmModels()" [ngValue]="model.id">{{ model.displayName }}</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <input class="input" type="password" placeholder="LLM API Key (optional)" [(ngModel)]="form().llm_api_key" />
+      <div class="muted" *ngIf="editingAgentHasApiKey()" style="font-size:12px; margin-left:8px; align-self:center;">Leave blank to keep existing API key</div>
+    </div>
+
+    <hr style="margin: 16px 0;">
+    <div class="meta-text" style="margin-bottom: 12px;">AI Configuration</div>
+
+    <div class="form-row">
+      <textarea class="input" rows="8" placeholder="Agent Instructions - Describe what analysis the AI should perform on the API response data" [(ngModel)]="form().agent_instructions"></textarea>
+    </div>
+
+    <div class="form-row">
+      <textarea class="input" rows="3" placeholder="Response Mapping (optional) - JSON path or extraction instructions" [(ngModel)]="form().response_mapping"></textarea>
+    </div>
+
+    <div class="row wrap" style="gap:8px">
+      <button class="btn" (click)="createAgent()" [disabled]="isLoading()">{{ isLoading() ? (editingAgentId() ? 'Saving…' : 'Creating…') : (editingAgentId() ? 'Save Changes' : 'Create Agent') }}</button>
+      <button class="btn secondary" *ngIf="editingAgentId() !== null" (click)="cancelEdit()">Cancel</button>
+      <div class="error" *ngIf="error()">{{ error() }}</div>      <div class="notice" *ngIf="notice()">{{ notice() }}</div>    </div>
+  </section>
+
+  <section class="surface card stack" style="margin-top:16px;">
+    <div class="card-title">Existing Agents</div>
+    <div class="agent-grid">
+      <article class="agent-card surface" *ngFor="let a of agents();" (click)="startEdit(a)" style="cursor:pointer;">
+        <div class="card-title">
+          <span class="card-title-text">{{ a.name }}</span>
+          <div class="card-actions">
+            <button class="btn" (click)="startEdit(a); $event.stopPropagation()">Edit</button>
+            <button class="btn secondary" (click)="cloneAgent(a); $event.stopPropagation()">Clone</button>
+          </div>
+        </div>
+
+        <div class="meta-text">{{ a.visibility }} • {{ a.http_method }} {{ a.endpoint_url }}</div>
+        <p class="muted">{{ a.description }}</p>
+      </article>
+    </div>
+  </section>
+</div>
