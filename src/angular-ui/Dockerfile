@@ -18,9 +18,9 @@ RUN npm run build -- --configuration=production
 # ── Serve stage ──
 FROM nginx:1.27.0-alpine
 
-# Add non-root user for security
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S nginx -u 1001
+# Add non-root user for security (ignore if exists)
+RUN addgroup -g 1001 -S nginx || true && \
+    adduser -S nginx -u 1001 || true
 
 COPY --from=build /app/dist/angular-ui/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
