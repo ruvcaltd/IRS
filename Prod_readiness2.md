@@ -234,10 +234,10 @@ All critical and high-severity issues from the initial security audit have been 
 ✅ No API keys in source code
 ✅ No encryption keys in repository
 ✅ No database credentials in code
-✅ Removed: OpenFigi key (redacted)
-✅ Removed: SQL password (redacted)
-✅ Removed: JWT key (redacted)
-✅ Removed: Encryption keys (redacted)
+✅ Removed: OpenFigi key 012c5587-ae3c-47fa-b783-97bc0d4962e0
+✅ Removed: SQL password YourStr0ng!Passw0rd123
+✅ Removed: JWT key your-secret-key-minimum-32-characters-long-for-jwt-signing
+✅ Removed: Encryption keys TXlTZWNyZXRLZXkxMjM0NU15U2VjcmV0S2V5MTIzNDU=
 ```
 
 ### Docker Security: ✅ HARDENED

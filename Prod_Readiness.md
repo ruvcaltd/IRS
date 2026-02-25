@@ -29,20 +29,20 @@ The following files contain actual secrets hardcoded in the repository:
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost,1433;Database=IRS;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
+    "DefaultConnection": "Server=localhost,1433;Database=IRS;User Id=sa;Password=YourStr0ng!Passw0rd123;TrustServerCertificate=True;"
   },
   "Jwt": {
-    "Key": "<your-jwt-secret-key>"
+    "Key": "your-secret-key-minimum-32-characters-long-for-jwt-signing"
   },
   "OpenFigi": {
-    "ApiKey": "<your-openfigi-key>"
+    "ApiKey": "012c5587-ae3c-47fa-b783-97bc0d4962e0"
   },
   "LlmEncryption": {
     "Key": "change-this-to-a-secure-32-character-key-in-production-environment"
   },
   "Encryption": {
-    "Key": "<your-encryption-key>",
-    "IV": "<your-encryption-iv>"
+    "Key": "TXlTZWNyZXRLZXkxMjM0NU15U2VjcmV0S2V5MTIzNDU=",
+    "IV": "TXlJbml0VmVjdG9yMTIzNA=="
   }
 }
 ```
@@ -421,7 +421,7 @@ But Dockerfile might expect different port.
 **Status:** Not Started  
 **Blocker:** DO THIS FIRST BEFORE COMMITTING
 
-- [ ] Generate NEW OpenFigi API key (old key was exposed - rotate immediately)
+- [ ] Generate NEW OpenFigi API key (old key: `012c5587-ae3c-47fa-b783-97bc0d4962e0` is exposed)
   - Register at: https://openfigidev.guidata.com/
   - Document in secure location (1Password, Azure KeyVault, etc.)
 - [ ] Invalidate old JWT secret
