@@ -56,6 +56,7 @@ jobs:
   build:
     needs: security-scan
     runs-on: ubuntu-latest
+    environment: production
     strategy:
       matrix:
         service: [dotnet-api, flask-api, angular-ui]
