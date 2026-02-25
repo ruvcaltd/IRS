@@ -357,7 +357,7 @@ FLASK_API_BASE_URL=http://localhost:5001
 ### `.env` (GITIGNORED — never committed)
 
 ```env
-SA_PASSWORD=YourStr0ng!Passw0rd
+SA_PASSWORD=<your-strong-password>
 DB_NAME=MyAppDb
 JWT_SECRET_KEY=a-very-long-random-string-at-least-32-characters
 JWT_ISSUER=MyApp
@@ -1206,7 +1206,7 @@ docker compose up db-deploy --build
 # Option B: Direct SqlPackage (if installed locally)
 sqlpackage /Action:Publish \
   /SourceFile:artifacts/MyDb.dacpac \
-  /TargetConnectionString:"Server=localhost;Database=MyAppDb;User Id=sa;Password=YourStr0ng!Passw0rd;TrustServerCertificate=True;"
+  /TargetConnectionString:"Server=localhost;Database=MyAppDb;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
 ```
 
 #### Step 4 — Regenerate EF Core Entities
@@ -1319,7 +1319,7 @@ docker compose down
 docker compose down -v
 
 # Access SQL Server from host
-sqlcmd -S localhost,1433 -U sa -P "YourStr0ng!Passw0rd" -C
+sqlcmd -S localhost,1433 -U sa -P "<your-password>" -C
 ```
 
 ### Host Ports Summary
