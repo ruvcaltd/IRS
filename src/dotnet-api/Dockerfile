@@ -1,5 +1,5 @@
 # Use the official .NET SDK image to build and publish the app
-FROM mcr.microsoft.com/dotnet/sdk:9.0.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0.101 AS build
 WORKDIR /app
 
 # Copy solution and restore as distinct layers
@@ -15,7 +15,7 @@ WORKDIR /app/src/IRS.Api
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
 # Build runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:9.0.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:9.0.101 AS final
 
 # Add non-root user for security
 RUN groupadd -r dotnetuser && useradd -r -g dotnetuser dotnetuser
