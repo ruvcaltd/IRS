@@ -12,7 +12,7 @@ RUN dotnet restore ./src/IRS.Api/IRS.Api.csproj
 # Copy everything else and build
 COPY ./src/ ./src/
 WORKDIR /app/src/IRS.Api
-RUN dotnet publish -c Release -o /app/publish --no-restore
+RUN dotnet publish -c Release -o /app/publish
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
