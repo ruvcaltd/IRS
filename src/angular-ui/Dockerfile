@@ -22,6 +22,9 @@ FROM nginx:1.27.0-alpine
 RUN addgroup -g 1001 -S nginx || true && \
     adduser -S nginx -u 1001 || true
 
+# guarantee that build output directory exists so cache key step succeeds
+RUN mkdir -p /app/dist/angular-ui/browser
+
 COPY --from=build /app/dist/angular-ui/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
