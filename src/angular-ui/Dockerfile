@@ -13,6 +13,10 @@ RUN apk add --no-cache curl \
         | tar -xz --strip-components=1 -C node_modules/@rollup/rollup-linux-x64-musl || true
 
 COPY . .
+
+# ensure output directory exists before building (prevents cache key errors)
+RUN mkdir -p /app/dist/angular-ui/browser
+
 RUN npm run build -- --configuration=production
 
 # ── Serve stage ──
