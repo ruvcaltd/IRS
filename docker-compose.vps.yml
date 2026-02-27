@@ -59,6 +59,9 @@ services:
       JWT_ISSUER: "${JWT_ISSUER}"
       JWT_AUDIENCE: "${JWT_AUDIENCE}"
       DOTNET_API_BASE_URL: "http://dotnet-api:8080"
+      Yahoo_Fin_user: "${Yahoo_Fin_user}"
+      Yahoo_fin_secret: "${Yahoo_fin_secret}"
+      SECRET_KEY: "${SECRET_KEY}"
     ports:
       - "5001:5001"
     depends_on:
