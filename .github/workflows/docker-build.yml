@@ -208,6 +208,7 @@ jobs:
           script: |
             set -e
             cd /IRS
+            git pull origin main
             docker compose -f docker-compose.vps.yml pull
             docker compose -f docker-compose.vps.yml up -d --force-recreate
             docker image prune -f
