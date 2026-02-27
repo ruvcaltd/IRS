@@ -65,6 +65,8 @@ services:
       Yahoo_Fin_user: "${Yahoo_Fin_user}"
       Yahoo_fin_secret: "${Yahoo_fin_secret}"
       SECRET_KEY: "${SECRET_KEY}"
+      BRAVE_API_TOKEN: "${BRAVE_API_TOKEN}"
+      BRAVE_GOGGLES_URL: "${BRAVE_GOGGLES_URL}"
     ports:
       - "5001:5001"
     depends_on:
