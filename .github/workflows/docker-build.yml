@@ -198,6 +198,19 @@ jobs:
     environment: production
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.vps.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 185.249.73.172
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.vps.yml"
+          target: "/IRS"
+
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -208,7 +221,6 @@ jobs:
           script: |
             set -e
             cd /IRS
-            git pull origin main
             docker compose -f docker-compose.vps.yml pull
             docker compose -f docker-compose.vps.yml up -d --force-recreate
             docker image prune -f
