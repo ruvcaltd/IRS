@@ -1,550 +1,504 @@
 # Production Deployment Guide
 
-**Document Version:** 1.0  
-**Last Updated:** February 24, 2026  
-**Status:** PRODUCTION READY
+**Document Version:** 2.0  
+**Last Updated:** February 27, 2026  
+**Live URL:** https://irs.ruvca-investments.com
 
 ---
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Environment Setup](#environment-setup)
-3. [Deployment Methods](#deployment-methods)
-4. [Credential Management](#credential-management)
-5. [Health Checks](#health-checks)
-6. [Monitoring](#monitoring)
-7. [Troubleshooting](#troubleshooting)
-8. [Rollback Procedure](#rollback-procedure)
+1. [Architecture Overview](#architecture-overview)
+2. [First-Time VPS Setup](#first-time-vps-setup)
+3. [GitHub Actions CI/CD Setup](#github-actions-cicd-setup)
+4. [SSL Certificate (Let's Encrypt)](#ssl-certificate-lets-encrypt)
+5. [Custom Domain via Cloudflare](#custom-domain-via-cloudflare)
+6. [Environment Variables Reference](#environment-variables-reference)
+7. [Ongoing Operations](#ongoing-operations)
+8. [Troubleshooting — Lessons Learned](#troubleshooting--lessons-learned)
 
 ---
 
-## Prerequisites
+## Architecture Overview
 
-### Infrastructure Requirements
+```
+Browser
+  │
+  ▼
+Cloudflare (DNS proxy + SSL termination)
+  │  HTTPS :443
+  ▼
+VPS (185.249.73.172)
+  │
+  ├── angular-ui container  :80 / :443
+  │     ├── serves Angular SPA static files
+  │     └── proxies /api/* → dotnet-api:8080
+  │
+  ├── dotnet-api container  :8080 (internal), :5000 (host)
+  │     └── connects to flask-api:5001, sqlserver:1433
+  │
+  ├── flask-api container   :5001
+  │     └── connects to sqlserver:1433, Yahoo Finance API
+  │
+  └── sqlserver container   :1433
+        └── persisted to named Docker volume: sqlserver-data
+```
 
-- **Docker Engine:** 20.10+ or **Docker Desktop** 4.10+
-- **Docker Compose:** 2.0+ (standalone)
-- **Kubernetes:** 1.24+ (optional, for K8s deployments)
-- **Storage:** 20GB minimum for database volumes
-- **Memory:** 8GB minimum RAM
-- **Network:** TLS/HTTPS configured for production
-
-### Access Requirements
-
-- Azure KeyVault access (or other secrets management system)
-- Docker registry credentials
-- Database backup location configured
-- Monitoring space available (Application Insights, Datadog, etc.)
+All containers communicate on a private Docker bridge network (`app-network`).
+Only `angular-ui` is exposed to the internet on ports 80/443.
 
 ---
 
-## Environment Setup
+## First-Time VPS Setup
 
-### Step 1: Prepare Secrets
-
-Create a `.env.prod` file with actual values (NEVER commit this file):
+### 1. Create the working directory on the VPS
 
 ```bash
-# Copy and populate with real values
-cp .env.template .env.prod
-
-# Generate secure values
-SA_PASSWORD=$(openssl rand -base64 32)
-JWT_SECRET_KEY=$(openssl rand -base64 32)
-
-# Edit .env.prod with editor
-nano .env.prod  # or edit with your editor
+mkdir -p /IRS
+cd /IRS
 ```
 
-### Step 2: Configure Secrets Management
+### 2. Copy required files from your local machine
 
-**Option A: Environment Variables (Simple)**
+Run this **from your local machine** (Windows PowerShell or WSL):
+
 ```bash
-export SA_PASSWORD="your-secure-password"
-export JWT_SECRET_KEY="your-secure-jwt-key"
-export OPENFIGI_API_KEY="your-api-key"
-export LLM_ENCRYPTION_KEY="generated-key"
-export ENCRYPTION_KEY="generated-key"
-export ENCRYPTION_IV="generated-iv"
-export DB_NAME="IRS"
+scp docker-compose.vps.yml docker-compose.yml .env root@185.249.73.172:/IRS
 ```
 
-**Option B: Azure KeyVault (Recommended)**
+> **Important:** `.env` is gitignored and **must always be copied manually**. It is never committed to git.
+> Every time you add a new variable to `.env`, copy it to the VPS again.
+
+### 3. Start the stack
+
 ```bash
-# Create KeyVault
-az keyvault create --name irs-secrets --resource-group mygroup
-
-# Store secrets
-az keyvault secret set --vault-name irs-secrets --name "SA-PASSWORD" --value "$SA_PASSWORD"
-az keyvault secret set --vault-name irs-secrets --name "JWT-SECRET-KEY" --value "$JWT_SECRET_KEY"
-
-# Access in deployment
-export SA_PASSWORD=$(az keyvault secret show --vault-name irs-secrets --name "SA-PASSWORD" -q --query value)
+cd /IRS
+docker compose -f docker-compose.vps.yml pull
+docker compose -f docker-compose.vps.yml up -d
 ```
 
-**Option C: Kubernetes Secrets**
+### 4. Verify all containers are healthy
+
 ```bash
-kubectl create secret generic app-secrets \
-  --from-literal=sa-password='password' \
-  --from-literal=jwt-secret-key='key' \
-  --from-literal=openfigi-api-key='key' \
-  -n production
+docker compose -f docker-compose.vps.yml ps
+docker logs dotnet-api --tail 20
+docker logs flask-api --tail 20
+docker logs angular-ui --tail 20
 ```
 
 ---
 
-## Deployment Methods
+## GitHub Actions CI/CD Setup
 
-### Method 1: Docker Compose (Single Server)
+Every push to `main` automatically:
 
-#### Command
+1. Scans for exposed secrets (TruffleHog)
+2. Builds Docker images for `dotnet-api`, `flask-api`, `angular-ui`
+3. Pushes images to Docker Hub (`eshivakant/irs-*:latest`)
+4. Scans images for vulnerabilities (Trivy)
+5. SCPs the updated `docker-compose.vps.yml` to the VPS
+6. SSHs into VPS → pulls new images → recreates all containers
+
+### Required GitHub Secrets
+
+> Secrets must live in a GitHub **Environment** named `production`.
+> Go to: **Repository → Settings → Environments → New environment → production**
+> Then add secrets inside that environment (not at repo level).
+
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | `eshivakant` |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (not your password — generate at hub.docker.com → Account Settings → Security) |
+| `VPS_SSH_PRIVATE_KEY` | Contents of the SSH private key that has access to the VPS (see below) |
+
+### Generating the SSH deploy key
 
 ```bash
-# Load environment from secure location
-source get-secrets.sh  # Your script to load from KeyVault/etc
+# On your local machine
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy_key -N ""
 
-# Start production deployment
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Add public key to VPS authorized_keys
+ssh-copy-id -i ~/.ssh/github_deploy_key.pub root@185.249.73.172
+# or manually on VPS: cat >> ~/.ssh/authorized_keys
 
-# Or with env file
-docker compose --env-file .env.prod \
-  -f docker-compose.yml \
-  -f docker-compose.prod.yml up -d
+# Print the private key — paste its full contents as VPS_SSH_PRIVATE_KEY secret
+cat ~/.ssh/github_deploy_key
 ```
 
-#### Verification
+> **Critical:** The public key on the VPS and the private key in GitHub Secrets must be a matched pair.
+> If the SSH connection fails, delete and recreate both — do not try to reuse old keys.
+
+### How the deploy step works
+
+The pipeline does **not** use `git pull` on the VPS (the `/IRS` directory is not a git clone — files are managed manually/via SCP). Instead:
+
+1. `appleboy/scp-action` copies `docker-compose.vps.yml` from the GitHub Actions runner to `/IRS` on the VPS
+2. `appleboy/ssh-action` then runs `docker compose pull` + `up -d --force-recreate`
+
+This means `docker-compose.vps.yml` changes are always deployed automatically without manual SCP.
+The `.env` file still requires manual management.
+
+---
+
+## SSL Certificate (Let's Encrypt)
+
+SSL is terminated on the VPS inside the nginx (`angular-ui`) container using free Let's Encrypt certificates.
+The cert files live on the VPS host and are mounted as a read-only volume into the container.
+
+### Issuing the certificate (first time only)
+
+> **Prerequisite:** The Cloudflare DNS A record for `irs.ruvca-investments.com` must be **grey cloud (DNS only / unproxied)** when running certbot. Certbot must be able to reach port 80 on the VPS directly to complete the ACME HTTP-01 challenge.
 
 ```bash
-# Check container status
-docker compose ps
+# Stop nginx to free port 80 for certbot's ACME challenge
+docker stop angular-ui
 
-# Verify health
-docker compose exec dotnet-api curl http://localhost:8080/health
-docker compose exec flask-api curl http://localhost:5001/health
+# Install certbot
+apt update && apt install -y certbot
 
-# View logs
-docker compose logs -f dotnet-api
-docker compose logs -f flask-api
-docker compose logs -f angular-ui
+# Issue the certificate
+certbot certonly --standalone -d irs.ruvca-investments.com
+
+# Fix permissions — certbot creates its dirs as mode 700 (root only).
+# The nginx process inside Docker runs as a non-root user and cannot read them.
+chmod 755 /etc/letsencrypt/live
+chmod 755 /etc/letsencrypt/archive
+chmod 755 /etc/letsencrypt/archive/irs.ruvca-investments.com
+chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
+
+# Start nginx back up
+docker start angular-ui
+
+# Confirm it started cleanly — must see no [emerg] errors
+docker logs angular-ui --tail 10
 ```
 
-#### Database Initialization
+### Certificate auto-renewal (cron)
+
+Let's Encrypt certificates expire every 90 days. This cron job renews them on the 1st of each month at 03:00:
 
 ```bash
-# Wait for db-deploy to complete
-docker compose logs -f db-deploy
+echo "0 3 1 * * docker stop angular-ui && certbot renew --quiet && chmod 755 /etc/letsencrypt/live /etc/letsencrypt/archive /etc/letsencrypt/archive/irs.ruvca-investments.com && chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem && docker start angular-ui" | crontab -
 
-# Verify database created
-docker compose exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" -Q "SELECT name FROM sys.databases"
+# Verify it was saved
+crontab -l
+```
+
+### Renewing manually
+
+```bash
+docker stop angular-ui
+certbot renew
+chmod 755 /etc/letsencrypt/live /etc/letsencrypt/archive /etc/letsencrypt/archive/irs.ruvca-investments.com
+chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
+docker start angular-ui
 ```
 
 ---
 
-### Method 2: Kubernetes (Cloud/Enterprise)
+## Custom Domain via Cloudflare
 
-#### Prerequisite: Create Secrets
+### Creating the subdomain DNS record
 
-```bash
-kubectl create secret generic app-secrets \
-  --from-literal=SA_PASSWORD="$(openssl rand -base64 32)" \
-  --from-literal=JWT_SECRET_KEY="$(openssl rand -base64 32)" \
-  --from-literal=OPENFIGI_API_KEY="xxxxx" \
-  --from-literal=LLM_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
-  --from-literal=ENCRYPTION_KEY="$(openssl rand -base64 32)" \
-  --from-literal=ENCRYPTION_IV="$(openssl rand -base64 32)" \
-  -n production
+1. Log in to [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Select domain `ruvca-investments.com`
+3. Go to **DNS → Records → Add record**
+4. Set:
+   - **Type:** `A`
+   - **Name:** `irs`
+   - **IPv4 address:** `185.249.73.172`
+   - **Proxy status:** Grey cloud (DNS only) — required while issuing the cert
+
+### Cloudflare SSL/TLS mode
+
+After the cert is issued and nginx is running:
+
+1. Switch DNS record to **orange cloud (Proxied)**
+2. Go to **SSL/TLS → Overview**
+3. Set mode to **Full**
+
+| Mode | Browser→CF | CF→VPS | When to use |
+|---|---|---|---|
+| Off | HTTP | HTTP | Never — insecure |
+| Flexible | HTTPS | HTTP | Only if no cert on VPS |
+| **Full** | HTTPS | HTTPS | ✅ Our setup — real cert on VPS |
+| Full (strict) | HTTPS | HTTPS | Requires specific CA chain |
+
+> Do **not** use Flexible when you have a real cert — it causes redirect loops (nginx redirects HTTP → HTTPS, Cloudflare sends HTTP, infinite loop).
+
+### Per-subdomain SSL override (if primary domain needs different mode)
+
+1. Cloudflare → **Rules → Configuration Rules → Create rule**
+2. Condition: `Hostname equals irs.ruvca-investments.com`
+3. Setting: **SSL → Full**
+4. Save & Deploy
+
+---
+
+## Environment Variables Reference
+
+### `.env` file (gitignored — never committed to git)
+
+```dotenv
+# ─── SQL Server ───────────────────────────────
+SA_PASSWORD=YourStr0ng!Passw0rd123
+DB_NAME=MyAppDb
+
+# ─── JWT Authentication ──────────────────────
+JWT_SECRET_KEY=your-secret-key-minimum-32-characters-long
+JWT_ISSUER=MyApp
+JWT_AUDIENCE=MyApp
+
+# ─── API URLs (for Angular build args) ───────
+DOTNET_API_BASE_URL=http://localhost:5000
+
+# ─── VPS ─────────────────────────────────────
+VPS_IP=185.249.73.172
+VPS_DOMAIN=irs.ruvca-investments.com
+
+# ─── External APIs ───────────────────────────
+OPENFIGI_API_KEY=your-key
+BRAVE_API_TOKEN=your-token
+BRAVE_GOGGLES_URL=https://raw.githubusercontent.com/...
+
+# ─── Encryption ──────────────────────────────
+LLM_ENCRYPTION_KEY=32-char-key
+ENCRYPTION_KEY=base64-encoded-32-byte-key
+ENCRYPTION_IV=base64-encoded-16-byte-iv
+
+# ─── Flask API credentials ───────────────────
+Yahoo_Fin_user=your-yahoo-username
+Yahoo_fin_secret=your-yahoo-password
+SECRET_KEY=flask-session-secret-key
 ```
 
-#### Deploy
+### Adding a new environment variable
 
+1. Add to local `.env`
+2. Add to `docker-compose.vps.yml` under the relevant service's `environment:` block: `NEW_VAR: "${NEW_VAR}"`
+3. Add to VPS `.env`:
+   ```bash
+   echo "NEW_VAR=value" >> /IRS/.env
+   ```
+4. Recreate only the affected container:
+   ```bash
+   docker compose -f /IRS/docker-compose.vps.yml up -d --force-recreate <service-name>
+   ```
+
+> **Important:** `docker compose up -d` (without `--force-recreate`) does NOT restart containers that are already running, even if environment variables changed. Always use `--force-recreate` when applying env var changes.
+
+---
+
+## Ongoing Operations
+
+### Deploy a change
+
+Push to `main` — the CI/CD pipeline handles everything:
 ```bash
-# Apply manifests
-kubectl apply -f k8s-namespace.yaml
-kubectl apply -f k8s-secrets.yaml
-kubectl apply -f k8s-statefulset-db.yaml
-kubectl apply -f k8s-deployment-api.yaml
-kubectl apply -f k8s-deployment-ui.yaml
-
-# Verify deployment
-kubectl get pods -n production
-kubectl get svc -n production
+git push origin main
 ```
 
-#### Example K8s Deployment Snippet
+### Trigger a deployment without a code change
 
+```bash
+git commit --allow-empty -m "ci: trigger deployment"
+git push origin main
+```
+
+### Check container status on VPS
+
+```bash
+docker compose -f /IRS/docker-compose.vps.yml ps
+docker stats --no-stream
+```
+
+### View logs
+
+```bash
+docker logs angular-ui --tail 50 -f
+docker logs dotnet-api --tail 50 -f
+docker logs flask-api --tail 50 -f
+docker logs sqlserver --tail 50
+```
+
+### Restart a single service
+
+```bash
+docker compose -f /IRS/docker-compose.vps.yml restart flask-api
+```
+
+### Force recreate a service (e.g. after `.env` changes)
+
+```bash
+docker compose -f /IRS/docker-compose.vps.yml up -d --force-recreate flask-api
+```
+
+### Verify environment variables inside a container
+
+```bash
+docker exec flask-api env | grep Yahoo
+docker exec dotnet-api env | grep Cors
+```
+
+### Manual full redeploy (if CI/CD is unavailable)
+
+```bash
+# From local machine
+scp docker-compose.vps.yml .env root@185.249.73.172:/IRS
+
+# On VPS
+cd /IRS
+docker compose -f docker-compose.vps.yml pull
+docker compose -f docker-compose.vps.yml up -d --force-recreate
+docker image prune -f
+```
+
+---
+
+## Troubleshooting — Lessons Learned
+
+### CORS error: request blocked by browser
+
+**Symptom:**
+```
+Access to XMLHttpRequest at 'http://localhost:5000/api/v1/...' from origin 'http://185.249.73.172' blocked by CORS policy
+```
+
+**Root cause 1 — Angular building with dev environment:**  
+`angular.json` was missing `fileReplacements` in the production configuration, so `environment.ts` (with `apiBaseUrl: 'http://localhost:5000'`) was always bundled instead of `environment.prod.ts` (with `apiBaseUrl: ''`).
+
+**Fix:** Ensure `angular.json` production config has:
+```json
+"production": {
+  "fileReplacements": [
+    {
+      "replace": "src/environments/environment.ts",
+      "with": "src/environments/environment.prod.ts"
+    }
+  ]
+}
+```
+
+**Root cause 2 — CORS allowed origins missing the VPS IP/domain:**  
+The dotnet-api CORS policy only listed localhost. The browser's origin (`http://185.249.73.172` or `https://irs.ruvca-investments.com`) was not in the allowed list.
+
+**Fix:** `docker-compose.vps.yml` now injects:
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dotnet-api
-  namespace: production
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: dotnet-api
-  template:
-    metadata:
-      labels:
-        app: dotnet-api
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-      containers:
-      - name: dotnet-api
-        image: your-registry.azurecr.io/irs-api:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Production"
-        - name: SA_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: SA_PASSWORD
-        - name: JWT_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: JWT_SECRET_KEY
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 10
+Cors__AllowedOrigins__0: "http://${VPS_IP}"
+Cors__AllowedOrigins__1: "http://${VPS_DOMAIN}"
+Cors__AllowedOrigins__2: "https://${VPS_DOMAIN}"
 ```
 
 ---
 
-### Method 3: Azure Container Instances (ACI)
+### Flask API returns 401 Unauthorized
 
+**Symptom:** `Failed to authenticate: {"error":"Invalid credentials"}`
+
+**Diagnosis:**
 ```bash
-# Create container group
-az container create \
-  --resource-group mygroup \
-  --name irs-app \
-  --image your-registry.azurecr.io/irs-api:latest \
-  --environment-variables \
-    ASPNETCORE_ENVIRONMENT=Production \
-  --secure-environment-variables \
-    SA_PASSWORD=$SA_PASSWORD \
-    JWT_SECRET_KEY=$JWT_SECRET_KEY \
-  --registry-login-server your-registry.azurecr.io \
-  --registry-username username \
-  --registry-password password
+docker exec flask-api env | grep Yahoo
+```
+If this returns nothing — the container doesn't have the vars.
+
+**Root cause 1 — Variables not in VPS `.env`:**
+The VPS `.env` was missing `Yahoo_Fin_user`, `Yahoo_fin_secret`, `SECRET_KEY`.
+
+**Root cause 2 — Old `docker-compose.vps.yml` on VPS:**
+The compose file was updated locally and committed, but the VPS still had the old version without the env var mappings. The CI/CD pipeline now copies `docker-compose.vps.yml` to the VPS on every deploy via `scp-action`.
+
+**Root cause 3 — Agent DB record has wrong password:**
+The agent record in the database stores an AES-encrypted password. When decrypted, it must exactly match `Yahoo_fin_secret`. If the agent was created in the UI with a different password, update it via the Angular UI.
+
+**Fix sequence:**
+1. Verify VPS `.env` has the Yahoo vars
+2. Recreate flask-api: `docker compose -f /IRS/docker-compose.vps.yml up -d --force-recreate flask-api`
+3. Verify: `docker exec flask-api env | grep Yahoo`
+4. If still failing — update the agent's password in the Angular UI to match `Yahoo_fin_secret`
+
+---
+
+### nginx fails to start — SSL cert not found
+
+**Symptom:**
+```
+[emerg] cannot load certificate ".../fullchain.pem": No such file or directory
+```
+
+**Cause:** certbot has not been run yet. The cert files don't exist at `/etc/letsencrypt/`.
+
+**Fix:** Run certbot (see [SSL Certificate](#ssl-certificate-lets-encrypt) section above).
+
+---
+
+### nginx fails to start — Permission denied on cert
+
+**Symptom:**
+```
+[emerg] cannot load certificate ".../fullchain.pem": Permission denied
+```
+
+**Cause:** certbot creates `/etc/letsencrypt/live` and `/etc/letsencrypt/archive` with mode `700` (root-only). The nginx process inside Docker runs as a non-root user.
+
+**Fix:**
+```bash
+chmod 755 /etc/letsencrypt/live
+chmod 755 /etc/letsencrypt/archive
+chmod 755 /etc/letsencrypt/archive/irs.ruvca-investments.com
+chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
+docker restart angular-ui
 ```
 
 ---
 
-## Credential Management
+### GitHub Actions deploy fails — "not a git repository"
 
-### Best Practices
+**Symptom:** `fatal: not a git repository (or any of the parent directories): .git`
 
-✅ **DO:**
-- Store credentials in: Azure KeyVault, AWS Secrets Manager, HashiCorp Vault
-- Use short-lived credentials when possible
-- Rotate credentials quarterly
-- Audit who accesses credentials
-- Use different credentials for each environment
+**Cause:** `/IRS` on the VPS was created manually (not via `git clone`), so there is no `.git` directory. A `git pull` step in the deploy script will always fail.
 
-❌ **DON'T:**
-- Commit credentials to git
-- Store credentials in environment variables on long-lived containers
-- Share credentials via email or chat
-- Use same credentials across environments
-- Log credentials or sensitive data
+**Fix:** Remove `git pull` from the deploy script. Use `appleboy/scp-action` to copy changed files instead.
 
-### Credential Rotation
+---
 
-```bash
-#!/bin/bash
-# rotate-credentials.sh
+### GitHub Actions fails — Docker Hub authentication error
 
-# Generate new credentials
-NEW_SA_PASSWORD=$(openssl rand -base64 32)
-NEW_JWT_KEY=$(openssl rand -base64 32)
+**Symptom:** `Error: Username and password required` or empty credentials
 
-# Update in KeyVault
-az keyvault secret set --vault-name irs-secrets \
-  --name "SA-PASSWORD" --value "$NEW_SA_PASSWORD"
-az keyvault secret set --vault-name irs-secrets \
-  --name "JWT-SECRET-KEY" --value "$NEW_JWT_KEY"
+**Cause:** The GitHub Actions job is missing `environment: production`, so secrets stored in the `production` environment are not injected.
 
-# Redeploy containers with new secrets
-docker compose down
-source get-secrets.sh # Reload from KeyVault
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# Verify health
-docker compose exec dotnet-api curl http://localhost:8080/health
-
-echo "Credentials rotated successfully"
+**Fix:** Add to every job that needs Docker Hub credentials:
+```yaml
+environment: production
 ```
 
 ---
 
-## Health Checks
+### SSH handshake failure in GitHub Actions
 
-### Manual Health Checks
+**Symptom:** `ssh: handshake failed: ssh: unable to authenticate`
 
+**Cause:** The public key in `~/.ssh/authorized_keys` on the VPS does not match the private key stored in the `VPS_SSH_PRIVATE_KEY` GitHub secret.
+
+**Fix:**
 ```bash
-# .NET API
-curl -v http://localhost:5000/health
+# Generate a fresh key pair
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key -N ""
 
-# Flask API
-curl -v http://localhost:5001/health
+# Add public key to VPS
+ssh-copy-id -i ~/.ssh/deploy_key.pub root@185.249.73.172
 
-# Angular UI
-curl -v http://localhost/health
-
-# Database
-docker compose exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" -Q "SELECT @@VERSION"
-```
-
-### Docker Health Check Status
-
-```bash
-# View container health
-docker compose ps
-
-# Check specific container
-docker inspect --format='{{.State.Health.Status}}' container_name
-
-# View health check logs
-docker inspect --format='{{json .State.Health.Log}}' container_name
-```
-
-### Kubernetes Health Checks
-
-```bash
-# View probe status
-kubectl describe pod dotnet-api-xxxxx -n production
-
-# View events
-kubectl get events -n production --sort-by='.lastTimestamp'
-
-# Check readiness
-kubectl get endpoints -n production
+# Delete VPS_SSH_PRIVATE_KEY secret in GitHub and recreate it
+# with the content of: cat ~/.ssh/deploy_key
 ```
 
 ---
 
-## Monitoring
+### Cloudflare — infinite redirect loop
 
-### Application Insights (Azure)
+**Symptom:** Browser shows `ERR_TOO_MANY_REDIRECTS`
 
-```bash
-# Create Application Insights resource
-az monitor app-insights component create \
-  --app irs-insights \
-  --location eastus \
-  --resource-group mygroup
+**Cause:** Cloudflare SSL mode is set to **Flexible** while nginx is also redirecting HTTP → HTTPS. Cloudflare sends HTTP to the VPS, nginx redirects to HTTPS, Cloudflare receives the redirect and sends HTTP again — infinite loop.
 
-# Add instrumentation key to environment
-APPINSIGHTS_INSTRUMENTATION_KEY=$(az monitor app-insights component show \
-  --app irs-insights \
-  --resource-group mygroup \
-  --query instrumentationKey -o tsv)
-```
-
-### Logs and Metrics
-
-```bash
-# View container logs
-docker compose logs --tail 100 -f dotnet-api
-
-# Export logs
-docker compose logs > logs-$(date +%Y%m%d).txt
-
-# Monitor metrics
-docker stats
-
-# Create monitoring stack (with Prometheus + Grafana)
-docker compose -f monitoring/docker-compose.yml up -d
-```
-
----
-
-## Troubleshooting
-
-### Container Startup Issues
-
-```bash
-# Check logs
-docker compose logs dotnet-api
-
-# Check network connectivity
-docker compose exec dotnet-api curl http://sqlserver:1433
-```
-
-### Database Connection Issues
-
-```bash
-# Test database connectivity
-docker compose exec dotnet-api /bin/bash
-sqlcmd -S sqlserver -U sa -P $SA_PASSWORD -Q "SELECT @@VERSION"
-
-# Check database status
-docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" -Q "EXEC sp_helpdb"
-```
-
-### API Health Check Failures
-
-```bash
-# Check if port is listening
-docker compose exec dotnet-api netstat -tuln | grep 8080
-
-# Test direct connectivity
-docker compose exec dotnet-api curl -v http://localhost:8080/health
-
-# Check application startup
-docker compose logs --tail 50 dotnet-api
-```
-
-### Secret/Credential Issues
-
-```bash
-# Verify environment variables are set
-docker compose exec dotnet-api printenv | grep -i secret
-
-# Check if secrets are being loaded from environment
-# (Secrets should NOT appear in docker compose logs)
-
-# Reset and reload secrets
-source get-secrets.sh
-docker compose down
-docker compose up -d
-```
-
----
-
-## Rollback Procedure
-
-### Quick Rollback (Same Version)
-
-```bash
-# Stop current deployment
-docker compose down
-
-# Remove failed data (CAREFUL!)
-docker compose down -v  # Removes volumes - data loss!
-
-# Start with previous environment
-source get-secrets.sh
-docker compose up -d
-
-# Verify health
-docker compose exec dotnet-api curl http://localhost:8080/health
-```
-
-### Rollback to Previous Version
-
-```bash
-#!/bin/bash
-# rollback.sh
-
-PREVIOUS_IMAGE_TAG="v1.2.3"
-
-# Update image versions
-docker compose -f docker-compose.yml -f docker-compose.prod.yml stop dotnet-api
-
-# Pull previous version
-docker pull your-registry/irs-api:$PREVIOUS_IMAGE_TAG
-
-# Start with previous version
-IMAGE_TAG=$PREVIOUS_IMAGE_TAG docker compose up -d dotnet-api
-
-# Verify
-docker compose logs -f dotnet-api
-```
-
-### Database Rollback
-
-```bash
-# Restore from backup
-az sql db restore \
-  --name IRS \
-  --server your-server \
-  --resource-group mygroup \
-  --time "2026-02-24T10:00:00Z"
-
-# Or restore locally
-docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" \
-  -Q "RESTORE DATABASE IRS FROM DISK = '/var/opt/mssql/backup/IRS.bak'"
-```
-
----
-
-## Security Checklist
-
-Before production:
-
-- [ ] All secrets rotated from development values
-- [ ] Credentials stored in KeyVault (not in code/environment)
-- [ ] HTTPS/TLS configured
-- [ ] Database backups configured
-- [ ] Monitoring and alerting enabled
-- [ ] Network policies restrict database access
-- [ ] Container images scanned for vulnerabilities
-- [ ] Non-root users configured
-- [ ] API authentication enabled
-- [ ] Rate limiting configured
-
----
-
-## Post-Deployment Validation
-
-```bash
-#!/bin/bash
-# post-deploy-validation.sh
-
-set -e
-
-echo "Validating deployment..."
-
-# Check containers are running
-echo "1. Checking container status..."
-docker compose ps | grep -E "(dotnet-api|flask-api|angular-ui|sqlserver)" || exit 1
-
-# Check health endpoints
-echo "2. Checking health endpoints..."
-curl -f http://localhost:5000/health || exit 1
-curl -f http://localhost:5001/health || exit 1
-
-# Check database connectivity
-echo "3. Checking database..."
-docker compose exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT COUNT(*) FROM sys.databases" || exit 1
-
-# Check API responses
-echo "4. Checking API endpoints..."
-curl -f http://localhost:5000/api/users || exit 1
-
-echo "✅ All validation checks passed!"
-```
-
----
-
-## Support and Escalation
-
-For production issues:
-1. Check logs: `docker compose logs -f`
-2. Verify health: `curl http://localhost:5000/health`
-3. Check credentials in KeyVault
-4. Review monitoring/alerting dashboards
-5. Contact: devops-team@company.com
+**Fix:** Set Cloudflare SSL/TLS mode to **Full** (since we have a real cert on the VPS).
 
