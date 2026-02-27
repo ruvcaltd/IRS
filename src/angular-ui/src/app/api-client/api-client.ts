@@ -28,7 +28,7 @@ export interface PiResponseDto {
 })
 export class UsersClient {
   private http = inject(HttpClient);
-  private baseUrl = inject(API_BASE_URL_TOKEN, { optional: true }) || 'http://localhost:5000';
+  private baseUrl = inject(API_BASE_URL_TOKEN, { optional: true }) || '';
 
   getUsers(): Observable<UserDto[]> {
     return this.http.get<UserDto[]>(`${this.baseUrl}/api/users`);
@@ -48,7 +48,7 @@ export class UsersClient {
 })
 export class PiClient {
   private http = inject(HttpClient);
-  private baseUrl = inject(API_BASE_URL_TOKEN, { optional: true }) || 'http://localhost:5000';
+  private baseUrl = inject(API_BASE_URL_TOKEN, { optional: true }) || '';
 
   getHelloPi(): Observable<PiResponseDto> {
     return this.http.get<PiResponseDto>(`${this.baseUrl}/api/pi/hello`);
