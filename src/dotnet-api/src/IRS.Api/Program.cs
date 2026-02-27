@@ -101,7 +101,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        var allowedOrigins = new[] 
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? new[]
         { 
             "http://localhost:4200",      // ng serve default
             "http://localhost",            // Docker/production on port 80
