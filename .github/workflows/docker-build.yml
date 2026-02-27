@@ -140,10 +140,10 @@ jobs:
       
       - name: Scan database image
         run: |
-          docker pull mcr.microsoft.com/mssql/server:2022-cu13
+          docker pull mcr.microsoft.com/mssql/server:2022-latest
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy image --severity HIGH,CRITICAL \
-            mcr.microsoft.com/mssql/server:2022-cu13 || true
+            mcr.microsoft.com/mssql/server:2022-latest || true
 
   # Integration tests
   test:

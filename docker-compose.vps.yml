@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    ports:
+      - "1433:1433"           # <–– add this line
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Express"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - app-network
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  dotnet-api:
+    image: eshivakant/irs-dotnet-api:latest
+    container_name: dotnet-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://0.0.0.0:8080"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER}"
+      Jwt__Audience: "${JWT_AUDIENCE}"
+      FlaskApi__BaseUrl: "http://flask-api:5001"
+      OpenFigi__ApiKey: "${OPENFIGI_API_KEY}"
+      LlmEncryption__Key: "${LLM_ENCRYPTION_KEY}"
+      Encryption__Key: "${ENCRYPTION_KEY}"
+      Encryption__IV: "${ENCRYPTION_IV}"
+    ports:
+      - "5000:8080"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  flask-api:
+    image: eshivakant/irs-flask-api:latest
+    container_name: flask-api
+    environment:
+      FLASK_ENV: "production"
+      DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=sqlserver;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      JWT_ISSUER: "${JWT_ISSUER}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE}"
+      DOTNET_API_BASE_URL: "http://dotnet-api:8080"
+    ports:
+      - "5001:5001"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  angular-ui:
+    image: eshivakant/irs-angular-ui:latest
+    container_name: angular-ui
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+
+volumes:
+  sqlserver-data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

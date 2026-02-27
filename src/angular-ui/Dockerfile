@@ -15,7 +15,7 @@ RUN apk add --no-cache curl \
 COPY . .
 
 # ensure output directory exists before building (prevents cache key errors)
-RUN mkdir -p /app/dist/angular-ui/browser
+RUN mkdir -p /app/dist/ClientApp/browser
 
 RUN npm run build -- --configuration=production
 
@@ -27,9 +27,9 @@ RUN addgroup -g 1001 -S nginx || true && \
     adduser -S nginx -u 1001 || true
 
 # guarantee that build output directory exists so cache key step succeeds
-RUN mkdir -p /app/dist/angular-ui/browser
+RUN mkdir -p /app/dist/ClientApp/browser
 
-COPY --from=build /app/dist/angular-ui/browser /usr/share/nginx/html
+COPY --from=build /app/dist/ClientApp/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Set permissions

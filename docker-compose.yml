@@ -3,7 +3,7 @@ services:
   # SQL Server Express 2022
   # ──────────────────────────────────────────────
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-cu13
+    image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
     environment:
       ACCEPT_EULA: "Y"
