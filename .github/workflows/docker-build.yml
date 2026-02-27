@@ -209,7 +209,7 @@ jobs:
             set -e
             cd /IRS
             docker compose -f docker-compose.vps.yml pull
-            docker compose -f docker-compose.vps.yml up -d
+            docker compose -f docker-compose.vps.yml up -d --force-recreate
             docker image prune -f
             echo "✅ Deployed commit ${{ github.sha }}"
 
