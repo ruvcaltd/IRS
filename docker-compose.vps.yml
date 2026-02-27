@@ -37,7 +37,9 @@ services:
       Encryption__Key: "${ENCRYPTION_KEY}"
       Encryption__IV: "${ENCRYPTION_IV}"
       Cors__AllowedOrigins__0: "http://${VPS_IP}"
-      Cors__AllowedOrigins__1: "http://localhost"
+      Cors__AllowedOrigins__1: "http://${VPS_DOMAIN}"
+      Cors__AllowedOrigins__2: "https://${VPS_DOMAIN}"
+      Cors__AllowedOrigins__3: "http://localhost"
     ports:
       - "5000:8080"
     networks:
