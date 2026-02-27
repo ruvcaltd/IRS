@@ -40,6 +40,7 @@ services:
       Cors__AllowedOrigins__1: "http://${VPS_DOMAIN}"
       Cors__AllowedOrigins__2: "https://${VPS_DOMAIN}"
       Cors__AllowedOrigins__3: "http://localhost"
+      Cors__AllowedOrigins__4: "https://localhost"
     ports:
       - "5000:8080"
     networks:
@@ -83,6 +84,9 @@ services:
     container_name: angular-ui
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - app-network
 
