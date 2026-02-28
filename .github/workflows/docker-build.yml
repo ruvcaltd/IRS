@@ -75,7 +75,6 @@ jobs:
           grep -q "appsettings.Production.json" .gitignore || exit 1
           grep -q "\.env" .gitignore || exit 1
           echo "✅ .gitignore properly configured"
-
   # Build images
   build:
     needs: [security-scan, detect-changes]
