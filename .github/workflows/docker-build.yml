@@ -149,8 +149,12 @@ jobs:
 
   # Scan images for vulnerabilities
   scan-images:
-    needs: build
-    if: github.event_name == 'push'
+    needs: [build, detect-changes]
+    if: github.event_name == 'push' && (
+          needs.detect-changes.outputs.angular == 'true' ||
+          needs.detect-changes.outputs.dotnet == 'true' ||
+          needs.detect-changes.outputs.flask == 'true'
+        )
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -164,22 +168,60 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner
+      - name: Scan .NET API image
+        if: needs.detect-changes.outputs.dotnet == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-dotnet-api:${{ github.sha }}
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-dotnet.sarif'
           severity: 'HIGH,CRITICAL'
       
-      - name: Upload Trivy report to GitHub Security
+      - name: Upload .NET SARIF
+        if: needs.detect-changes.outputs.dotnet == 'true'
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: 'trivy-dotnet.sarif'
           category: 'trivy-dotnet'
-      
+
+      - name: Scan Flask API image
+        if: needs.detect-changes.outputs.flask == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-flask-api:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-flask.sarif'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Flask SARIF
+        if: needs.detect-changes.outputs.flask == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-flask.sarif'
+          category: 'trivy-flask'
+
+      - name: Scan Angular UI image
+        if: needs.detect-changes.outputs.angular == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-angular-ui:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-angular.sarif'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Angular SARIF
+        if: needs.detect-changes.outputs.angular == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-angular.sarif'
+          category: 'trivy-angular'
+
       - name: Scan database image
         run: |
           docker pull mcr.microsoft.com/mssql/server:2022-latest
