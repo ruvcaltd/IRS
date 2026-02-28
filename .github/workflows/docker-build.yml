@@ -78,8 +78,7 @@ jobs:
   # Build images
   build:
     needs: [security-scan, detect-changes]
-    if: |
-      ${{ needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true' }}
+    if: ${{ needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -117,12 +116,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       
       - name: Build and push ${{ matrix.service }}
-        if: |
-          ${{
-            (matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') ||
-            (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') ||
-            (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true')
-          }}
+        if: ${{ (matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') || (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') || (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true') }}
         uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
@@ -149,11 +143,7 @@ jobs:
   # Scan images for vulnerabilities
   scan-images:
     needs: [build, detect-changes]
-    if: github.event_name == 'push' && (
-          needs.detect-changes.outputs.angular == 'true' ||
-          needs.detect-changes.outputs.dotnet == 'true' ||
-          needs.detect-changes.outputs.flask == 'true'
-        )
+    if: ${{ github.event_name == 'push' && (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
