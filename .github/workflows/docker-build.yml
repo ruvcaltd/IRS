@@ -12,6 +12,30 @@ env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/irs
 
 jobs:
+  # detect which services have changes; other jobs can reference outputs
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      angular: ${{ steps.filter.outputs.angular }}
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      flask: ${{ steps.filter.outputs.flask }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine changed paths
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            angular:
+              - 'src/angular-ui/**'
+            dotnet:
+              - 'src/dotnet-api/**'
+            flask:
+              - 'src/flask-api/**'
+
   # First job: scan for secrets in code
   security-scan:
     runs-on: ubuntu-latest
@@ -54,7 +78,9 @@ jobs:
 
   # Build images
   build:
-    needs: security-scan
+    needs: [security-scan, detect-changes]
+    if: |
+      ${{ needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -67,7 +93,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
@@ -92,6 +118,12 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       
       - name: Build and push ${{ matrix.service }}
+        if: |
+          ${{
+            (matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') ||
+            (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') ||
+            (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true')
+          }}
         uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
@@ -192,7 +224,7 @@ jobs:
 
   # Deploy to VPS
   deploy:
-    needs: build
+    needs: [build, detect-changes]
     if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -221,7 +253,16 @@ jobs:
           script: |
             set -e
             cd /IRS
-            docker compose -f docker-compose.vps.yml pull
+            # pull only changed services to minimize update time
+            pull_targets=""
+            if [ "${{ needs.detect-changes.outputs.angular }}" = "true" ]; then pull_targets+=" angular-ui"; fi
+            if [ "${{ needs.detect-changes.outputs.dotnet }}" = "true" ]; then pull_targets+=" dotnet-api"; fi
+            if [ "${{ needs.detect-changes.outputs.flask }}" = "true" ]; then pull_targets+=" flask-api"; fi
+            if [ -n "$pull_targets" ]; then
+              docker compose -f docker-compose.vps.yml pull $pull_targets
+            else
+              echo "No service changes detected; skipping pull."
+            fi
             docker compose -f docker-compose.vps.yml up -d --force-recreate
             docker image prune -f
             echo "✅ Deployed commit ${{ github.sha }}"
