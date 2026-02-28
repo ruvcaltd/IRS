@@ -38,6 +38,7 @@
   gap: 10px;
 }
 
+.section-card pre {
   white-space: pre-wrap;
   background: rgba(255, 255, 255, 0.02);
   border-radius: var(--radius-md);
@@ -57,7 +58,7 @@
   margin-bottom: 4px; /* halved */
 }
 
-comments {
+.comments {
   border-top: 1px solid var(--border-subtle);
   padding-top: 6px; /* halved */
   display: flex;
