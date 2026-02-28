@@ -11,8 +11,8 @@
 }
 
 .sections{
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .section-grid {
@@ -24,13 +24,13 @@
 .section-grid-vertical {
   display: flex;
   flex-direction: column;
-  gap: 4px; /* even tighter vertical spacing */
+  gap: 2px; /* halved vertical spacing */
   width: 100%;
 }
 
 /* slightly tighter cards for research page to give more horizontal room */
 .section-card {
-  padding: 8px; /* further reduced */
+  padding: 4px; /* halved to maximize content width */
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   display: flex;
@@ -38,16 +38,15 @@
   gap: 10px;
 }
 
-.section-card pre {
   white-space: pre-wrap;
   background: rgba(255, 255, 255, 0.02);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 6px; /* halved for denser code blocks */
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 .section-summary {
-  padding: 12px;
+  padding: 6px; /* halved */
   border-radius: var(--radius-md);
   background: rgba(34, 211, 238, 0.04);
 }
@@ -55,26 +54,26 @@
 /* Add spacing below header rows that use .space-between.wrap to improve separation */
 .section-agents .space-between.wrap,
 .surface.card.stack.sections > .space-between.wrap {
-  margin-bottom: 8px; /* reduced margin */
+  margin-bottom: 4px; /* halved */
 }
 
-.comments {
+comments {
   border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
+  padding-top: 6px; /* halved */
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px; /* halved */
 }
 
 .comment-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px; /* halved */
 }
 
 /* slightly tighter comment bubbles */
 .comment {
-  padding: 8px; /* formerly 10px */
+  padding: 4px; /* halved */
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-subtle);
@@ -144,12 +143,12 @@
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 4px; /* even narrower gap */
+  gap: 2px; /* halved gutter */
 }
 
 /* reduce padding on nested agent cards so they consume less horizontal space */
 .agent-card {
-  padding: 8px; /* further reduced */
+  padding: 4px; /* halved */
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
@@ -182,18 +181,18 @@
 
 .runs {
   border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
+  padding-top: 4px; /* halved */
 }
 
 .run-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px; /* halved */
 }
 
 /* runs are small status boxes; reduce padding slightly */
 .run {
-  padding: 6px; /* further trimmed */
+  padding: 3px; /* halved */
   border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.08);
 }
