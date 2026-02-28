@@ -11,8 +11,8 @@
 }
 
 .sections{
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 8px;
+  padding-top: 8px;
 }
 
 .section-grid {
@@ -24,12 +24,13 @@
 .section-grid-vertical {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px; /* even tighter vertical spacing */
   width: 100%;
 }
 
+/* slightly tighter cards for research page to give more horizontal room */
 .section-card {
-  padding: 16px;
+  padding: 8px; /* further reduced */
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   display: flex;
@@ -54,7 +55,7 @@
 /* Add spacing below header rows that use .space-between.wrap to improve separation */
 .section-agents .space-between.wrap,
 .surface.card.stack.sections > .space-between.wrap {
-  margin-bottom: 12px;
+  margin-bottom: 8px; /* reduced margin */
 }
 
 .comments {
@@ -71,8 +72,9 @@
   gap: 8px;
 }
 
+/* slightly tighter comment bubbles */
 .comment {
-  padding: 10px;
+  padding: 8px; /* formerly 10px */
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-subtle);
@@ -142,11 +144,12 @@
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
+  gap: 4px; /* even narrower gap */
 }
 
+/* reduce padding on nested agent cards so they consume less horizontal space */
 .agent-card {
-  padding: 14px;
+  padding: 8px; /* further reduced */
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
@@ -188,8 +191,9 @@
   gap: 6px;
 }
 
+/* runs are small status boxes; reduce padding slightly */
 .run {
-  padding: 10px;
+  padding: 6px; /* further trimmed */
   border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.08);
 }
