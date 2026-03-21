@@ -14,6 +14,11 @@ COPY ./src/ ./src/
 WORKDIR /app/src/IRS.Api
 RUN dotnet publish -c Release -o /app/publish
 
+# Development stage - used by docker-compose.override.yml for hot-reload with dotnet watch
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS development
+WORKDIR /app
+# Source code is volume-mounted at runtime; dotnet watch run handles compilation
+
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
