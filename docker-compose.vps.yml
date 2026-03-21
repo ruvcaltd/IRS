@@ -13,7 +13,10 @@ services:
     volumes:
       - sqlserver-data:/var/opt/mssql
     networks:
-      - app-network
+      app-network:
+      shared-sql-network:
+        aliases:
+          - sqlserver
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
       interval: 10s
@@ -98,4 +101,7 @@ volumes:
 
 networks:
   app-network:
+  shared-sql-network:
+    external: true
+    name: shared-sql-network
     driver: bridge
