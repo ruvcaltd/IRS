@@ -91,15 +91,28 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
       
+      - name: Set image tags
+        id: tags
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}"
+          {
+            echo 'tags<<EOF'
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "${IMAGE}:latest"
+            elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+              echo "${IMAGE}:dev"
+            fi
+            echo "${IMAGE}:${{ github.sha }}"
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
           file: ./src/${{ matrix.service }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}:${{ github.sha }}
+          tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -226,10 +239,58 @@ jobs:
             docker image prune -f
             echo "✅ Deployed commit ${{ github.sha }}"
 
+  # Deploy dev stack to VPS on push to develop
+  deploy-dev:
+    needs: build
+    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.dev-vps.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 185.249.73.172
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.dev-vps.yml"
+          target: "/IRS-dev"
+
+      - name: Copy nginx.dev.conf to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 185.249.73.172
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          source: "src/angular-ui/nginx.dev.conf"
+          target: "/IRS-dev"
+
+      - name: Deploy dev stack to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 185.249.73.172
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            # Flatten nginx.dev.conf from SCP-preserved path to /IRS-dev/ root
+            mv -f /IRS-dev/src/angular-ui/nginx.dev.conf /IRS-dev/nginx.dev.conf 2>/dev/null || true
+            cd /IRS-dev
+            docker compose -f docker-compose.dev-vps.yml pull
+            docker compose -f docker-compose.dev-vps.yml up -d --force-recreate
+            docker image prune -f
+            echo "✅ Dev deployed commit ${{ github.sha }}"
+
   # Notify on success
   notify:
-    needs: [security-scan, build, deploy]
-    if: success() && github.event_name == 'push'
+    needs: [security-scan, build, deploy, deploy-dev]
+    if: always() && github.event_name == 'push' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     
     steps:

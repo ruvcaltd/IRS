@@ -1,0 +1,83 @@
+name: irs-dev
+
+# Dev stack — runs alongside production on the same VPS.
+# Accessible at https://irs-dev.ruvca-investments.com (Cloudflare → VPS:8443).
+# No sqlserver service: shares the production SQL Server via host bridge,
+# but targets a separate IRS_Dev database.
+# Requires /IRS-dev/.env on the VPS (copy from .env.dev.template).
+# Requires /etc/cloudflare-origin/{origin-cert.pem,origin-key.pem} on the VPS.
+
+services:
+
+  dotnet-api:
+    image: eshivakant/irs-dotnet-api:dev
+    container_name: irs-dev-dotnet-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://0.0.0.0:8080"
+      ConnectionStrings__DefaultConnection: "Server=host.docker.internal,1433;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER}"
+      Jwt__Audience: "${JWT_AUDIENCE}"
+      FlaskApi__BaseUrl: "http://irs-dev-flask-api:5001"
+      OpenFigi__ApiKey: "${OPENFIGI_API_KEY}"
+      LlmEncryption__Key: "${LLM_ENCRYPTION_KEY}"
+      Encryption__Key: "${ENCRYPTION_KEY}"
+      Encryption__IV: "${ENCRYPTION_IV}"
+      Cors__AllowedOrigins__0: "https://${VPS_DOMAIN}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - irs-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  flask-api:
+    image: eshivakant/irs-flask-api:dev
+    container_name: irs-dev-flask-api
+    environment:
+      FLASK_ENV: "development"
+      DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=host.docker.internal,1433;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      JWT_ISSUER: "${JWT_ISSUER}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE}"
+      DOTNET_API_BASE_URL: "http://irs-dev-dotnet-api:8080"
+      Yahoo_Fin_user: "${Yahoo_Fin_user}"
+      Yahoo_fin_secret: "${Yahoo_fin_secret}"
+      SECRET_KEY: "${SECRET_KEY}"
+      BRAVE_API_TOKEN: "${BRAVE_API_TOKEN}"
+      BRAVE_GOGGLES_URL: "${BRAVE_GOGGLES_URL}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - irs-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  angular-ui:
+    image: eshivakant/irs-angular-ui:dev
+    container_name: irs-dev-angular-ui
+    ports:
+      - "8443:443"
+    volumes:
+      - /etc/cloudflare-origin:/etc/cloudflare-origin:ro
+      - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - irs-dev-network
+    restart: unless-stopped
+    depends_on:
+      - dotnet-api
+
+networks:
+  irs-dev-network:
+    driver: bridge
