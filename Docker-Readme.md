@@ -478,6 +478,19 @@ Containers reach each other by container name:
 **External access:**  
 Only `angular-ui` has ports exposed to the host. `dotnet-api` and `flask-api` are not directly reachable from outside — all traffic goes through nginx.
 
+### Shared SQL Network
+
+The SQL Server container is also attached to an external Docker network `shared-sql-network` for cross-stack connectivity.
+
+**Setup:**
+- Create the external network if it doesn't exist: `docker network create shared-sql-network`
+- The SQL Server is reachable from other containers on this network using the DNS name `sqlserver`
+- Connection string example: `Server=sqlserver;Database=YourDB;User Id=sa;Password=YourPassword;TrustServerCertificate=True;`
+
+**Verification:**
+- Check network attachment: `docker network inspect shared-sql-network`
+- Test connectivity from another container: `docker run --rm --network shared-sql-network mcr.microsoft.com/mssql/server:2022-latest sqlcmd -S sqlserver -U sa -P YourPassword -Q "SELECT @@VERSION"`
+
 ---
 
 ## Volume Architecture
