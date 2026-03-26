@@ -282,7 +282,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           port: 22
           source: "docker-compose.vps.yml"
-          target: "/IRS"
+          target: "/home/deploy/IRS"
 
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -293,7 +293,7 @@ jobs:
           port: 22
           script: |
             set -e
-            cd /IRS
+            cd /home/deploy/IRS
             # pull only changed services to minimize update time
             pull_targets=""
             if [ "${{ needs.detect-changes.outputs.angular }}" = "true" ]; then pull_targets+=" angular-ui"; fi
@@ -327,7 +327,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           port: 22
           source: "docker-compose.dev-vps.yml"
-          target: "/IRS-dev"
+          target: "/home/deploy/IRS-dev"
 
       - name: Copy nginx.dev.conf to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -337,7 +337,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           port: 22
           source: "src/angular-ui/nginx.dev.conf"
-          target: "/IRS-dev"
+          target: "/home/deploy/IRS-dev"
 
       - name: Deploy dev stack to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -348,9 +348,9 @@ jobs:
           port: 22
           script: |
             set -e
-            # Flatten nginx.dev.conf from SCP-preserved path to /IRS-dev/ root
-            mv -f /IRS-dev/src/angular-ui/nginx.dev.conf /IRS-dev/nginx.dev.conf 2>/dev/null || true
-            cd /IRS-dev
+            # Flatten nginx.dev.conf from SCP-preserved path to /home/deploy/IRS-dev/ root
+            mv -f /home/deploy/IRS-dev/src/angular-ui/nginx.dev.conf /home/deploy/IRS-dev/nginx.dev.conf 2>/dev/null || true
+            cd /home/deploy/IRS-dev
             docker compose -f docker-compose.dev-vps.yml pull
             docker compose -f docker-compose.dev-vps.yml up -d --force-recreate
             docker image prune -f
