@@ -1,36 +1,13 @@
 version: '3.8'
 
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: sqlserver
-    ports:
-      - "1433:1433"           # <–– add this line
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Express"
-      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
-    volumes:
-      - sqlserver-data:/var/opt/mssql
-    networks:
-      app-network:
-      shared-sql-network:
-        aliases:
-          - sqlserver
-    healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
   dotnet-api:
     image: eshivakant/irs-dotnet-api:latest
     container_name: dotnet-api
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=True;"
+      ConnectionStrings__DefaultConnection: "Server=host.docker.internal;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=True;"
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: "${JWT_ISSUER}"
       Jwt__Audience: "${JWT_AUDIENCE}"
@@ -66,7 +43,7 @@ services:
     container_name: flask-api
     environment:
       FLASK_ENV: "production"
-      DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=sqlserver;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
+      DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=host.docker.internal;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
       JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
       JWT_ISSUER: "${JWT_ISSUER}"
       JWT_AUDIENCE: "${JWT_AUDIENCE}"
@@ -76,9 +53,6 @@ services:
       SECRET_KEY: "${SECRET_KEY}"
       BRAVE_API_TOKEN: "${BRAVE_API_TOKEN}"
       BRAVE_GOGGLES_URL: "${BRAVE_GOGGLES_URL}"
-    depends_on:
-      sqlserver:
-        condition: service_healthy
     networks:
       - app-network
     healthcheck:
@@ -116,13 +90,5 @@ services:
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
-volumes:
-  sqlserver-data:
-    driver: local
-
 networks:
   app-network:
-  shared-sql-network:
-    external: true
-    name: shared-sql-network
-    driver: bridge
