@@ -85,7 +85,7 @@ jobs:
   # Build images
   build:
     needs: [security-scan, detect-changes]
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.force_deploy == 'true' || github.ref == 'refs/heads/develop')) || github.ref == 'refs/heads/develop' || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -130,7 +130,7 @@ jobs:
             echo 'tags<<EOF'
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
               echo "${IMAGE}:latest"
-            elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            elif [ "${{ github.ref }}" = "refs/heads/develop" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               echo "${IMAGE}:dev"
             fi
             echo "${IMAGE}:${{ github.sha }}"
@@ -138,7 +138,6 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Build and push ${{ matrix.service }}
-        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || ((matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') || (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') || (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true')) }}
         uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
@@ -163,7 +162,7 @@ jobs:
   # Scan images for vulnerabilities
   scan-images:
     needs: [build, detect-changes]
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true')) }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((github.event_name == 'workflow_dispatch' && (github.event.inputs.force_deploy == 'true' || github.ref == 'refs/heads/develop')) || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true')) }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -273,7 +272,7 @@ jobs:
   # Deploy to VPS
   deploy:
     needs: [build, detect-changes]
-    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: success() && (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production
 
@@ -323,7 +322,7 @@ jobs:
   # Deploy dev stack to VPS on push to develop
   deploy-dev:
     needs: build
-    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch')
+    if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/develop') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: production
 
