@@ -53,6 +53,7 @@ volumes:
 
 networks:
   app-network:
+    external: true
     name: app-network
     driver: bridge
     driver_opts:
