@@ -337,7 +337,7 @@ jobs:
       - name: Health check
         run: |
           echo "Checking .NET API health..."
-          curl -f http://localhost:5000/health || exit 1
+          curl -f http://localhost:5000/api/health || exit 1
           
           echo "Checking Flask API health..."
           curl -f http://localhost:5001/health || exit 1

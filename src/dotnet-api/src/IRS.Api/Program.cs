@@ -139,7 +139,11 @@ app.UseExceptionHandler(errApp =>
     });
 });
 
-app.UseHttpsRedirection();
+// Only redirect to HTTPS in development; in production Traefik handles TLS at the edge
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowAngular");
 
