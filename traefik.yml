@@ -5,8 +5,7 @@ api:
 providers:
   docker:
     exposedByDefault: false
-  file:
-    filename: /etc/traefik/traefik.yml  # For dynamic config if needed
+    network: app-network
 
 entryPoints:
   web:

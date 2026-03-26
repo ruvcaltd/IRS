@@ -300,6 +300,8 @@ jobs:
           script: |
             set -e
             cd /home/deploy/IRS
+            # ensure the external network exists before compose tries to attach to it
+            docker network create app-network || true
             force_deploy="${{ github.event.inputs.force_deploy }}"
             # pull only changed services to minimize update time, or all if force
             pull_targets=""
