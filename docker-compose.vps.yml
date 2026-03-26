@@ -79,6 +79,3 @@ services:
 networks:
   app-network:
     driver: bridge
-  shared-sql-network:
-    external: true
-    name: shared-sql-network

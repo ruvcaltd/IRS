@@ -28,7 +28,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - irs-dev-network
+      - app-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -55,7 +55,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - irs-dev-network
+      - app-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5001/health')"]
@@ -73,11 +73,11 @@ services:
       - /etc/cloudflare-origin:/etc/cloudflare-origin:ro
       - ./nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
-      - irs-dev-network
+      - app-network
     restart: unless-stopped
     depends_on:
       - dotnet-api
 
 networks:
-  irs-dev-network:
+  app-network:
     driver: bridge
