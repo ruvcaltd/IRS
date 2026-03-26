@@ -62,22 +62,6 @@ services:
       retries: 3
       start_period: 60s
 
-  traefik:
-    image: traefik:v2.11
-    container_name: traefik
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro
-      - /etc/letsencrypt:/letsencrypt
-    networks:
-      - app-network
-    command:
-      - "--configFile=/etc/traefik/traefik.yml"
-    restart: always
-
   angular-ui:
     image: eshivakant/irs-angular-ui:latest
     container_name: angular-ui
