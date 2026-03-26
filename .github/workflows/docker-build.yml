@@ -398,19 +398,14 @@ jobs:
             docker network create app-network || true
             force_deploy="${{ github.event.inputs.force_deploy }}"
 
-            # ── Schema migration (one-shot; run explicitly before app services) ──
-            # Pulling db-deploy separately means a missing image never blocks app services.
-            run_db_deploy=false
-            if [ "${{ needs.detect-changes.outputs.database }}" = "true" ] || [ "$force_deploy" = "true" ]; then
-              if docker compose -f docker-compose.vps.yml pull db-deploy; then
-                run_db_deploy=true
-              else
-                echo "⚠️  db-deploy image not yet available on registry; skipping schema migration this run"
-              fi
-            fi
-            if [ "$run_db_deploy" = "true" ]; then
+            # ── Schema migration (one-shot; always run to ensure schema is up to date) ──
+            # sqlpackage /Action:Publish is idempotent: it diffs the dacpac against the
+            # live database and only applies missing changes. Fast no-op if nothing changed.
+            if docker compose -f docker-compose.vps.yml pull db-deploy; then
               docker compose -f docker-compose.vps.yml run --rm db-deploy
               echo "✅ Schema migration complete"
+            else
+              echo "⚠️  db-deploy image not found on registry; skipping schema migration"
             fi
 
             # ── Application services ──
