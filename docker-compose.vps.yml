@@ -52,8 +52,6 @@ services:
       - "traefik.http.routers.irs-api.tls=true"
       - "traefik.http.routers.irs-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.irs-api.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.irs-api-strip.stripprefix.prefixes=/api"
-      - "traefik.http.routers.irs-api.middlewares=irs-api-strip"
 
   flask-api:
     image: eshivakant/irs-flask-api:latest
