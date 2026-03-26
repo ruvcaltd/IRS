@@ -271,8 +271,11 @@ jobs:
 
   # Deploy to VPS
   deploy:
-    needs: [build, detect-changes]
-    if: success() && (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: [detect-changes]
+    if: |
+      always() &&
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production
 
