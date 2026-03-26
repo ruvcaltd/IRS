@@ -140,7 +140,6 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || ((matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') || (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') || (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true')) }}
         uses: docker/build-push-action@v5
-        uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
           file: ./src/${{ matrix.service }}/Dockerfile
