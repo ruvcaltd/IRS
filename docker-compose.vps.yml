@@ -44,8 +44,6 @@ services:
       Cors__AllowedOrigins__2: "https://${VPS_DOMAIN}"
       Cors__AllowedOrigins__3: "http://localhost"
       Cors__AllowedOrigins__4: "https://localhost"
-    ports:
-      - "5000:8080"
     networks:
       - app-network
     healthcheck:
@@ -54,6 +52,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`irs.ruvca-investments.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.api-strip-prefix.stripprefix.prefixes=/api"
+      - "traefik.http.routers.api.middlewares=api-strip-prefix"
 
   flask-api:
     image: eshivakant/irs-flask-api:latest
@@ -70,8 +76,6 @@ services:
       SECRET_KEY: "${SECRET_KEY}"
       BRAVE_API_TOKEN: "${BRAVE_API_TOKEN}"
       BRAVE_GOGGLES_URL: "${BRAVE_GOGGLES_URL}"
-    ports:
-      - "5001:5001"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -84,16 +88,33 @@ services:
       retries: 3
       start_period: 60s
 
-  angular-ui:
-    image: eshivakant/irs-angular-ui:latest
-    container_name: angular-ui
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - /etc/letsencrypt:/letsencrypt
     networks:
       - app-network
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    restart: always
+
+  angular-ui:
+    image: eshivakant/irs-angular-ui:latest
+    container_name: angular-ui
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`irs.ruvca-investments.com`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
 volumes:
   sqlserver-data:

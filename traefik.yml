@@ -1,0 +1,37 @@
+api:
+  dashboard: true
+  insecure: true  # Remove in production, use auth
+
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    filename: /etc/traefik/traefik.yml  # For dynamic config if needed
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@ruvca-investments.com  # Update with your email
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# Optional: Use existing certs if preferred
+# tls:
+#   certificates:
+#     - certFile: /etc/letsencrypt/live/irs.ruvca-investments.com/fullchain.pem
+#       keyFile: /etc/letsencrypt/live/irs.ruvca-investments.com/privkey.pem
