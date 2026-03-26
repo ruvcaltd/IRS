@@ -85,7 +85,7 @@ jobs:
   # Build images
   build:
     needs: [security-scan, detect-changes]
-    if: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.force_deploy == 'true' || github.ref == 'refs/heads/develop')) || github.ref == 'refs/heads/develop' || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/develop' || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -128,9 +128,9 @@ jobs:
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}"
           {
             echo 'tags<<EOF'
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
               echo "${IMAGE}:latest"
-            elif [ "${{ github.ref }}" = "refs/heads/develop" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            else
               echo "${IMAGE}:dev"
             fi
             echo "${IMAGE}:${{ github.sha }}"
@@ -162,7 +162,7 @@ jobs:
   # Scan images for vulnerabilities
   scan-images:
     needs: [build, detect-changes]
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((github.event_name == 'workflow_dispatch' && (github.event.inputs.force_deploy == 'true' || github.ref == 'refs/heads/develop')) || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true')) }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
