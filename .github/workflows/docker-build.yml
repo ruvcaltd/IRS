@@ -50,7 +50,13 @@ jobs:
   # Build DACPAC from SQL Server project (requires Windows runner for legacy .sqlproj)
   build-dacpac:
     needs: [security-scan, detect-changes]
-    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/develop' || needs.detect-changes.outputs.database == 'true' }}
+    # Always run on main to ensure image is always available on Docker Hub.
+    # Also run on develop and when database files change on any branch.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/develop' ||
+      needs.detect-changes.outputs.database == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -350,11 +356,17 @@ jobs:
 
   # Deploy to VPS
   deploy:
-    needs: [detect-changes, push-db-deploy-image]
+    needs: [detect-changes, build, push-db-deploy-image]
+    # Run if all required jobs either succeeded or were skipped; never run if cancelled.
+    # Parentheses are critical here to avoid operator-precedence bugs with always().
     if: |
-      always() &&
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      always() && !cancelled() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.push-db-deploy-image.result == 'success' || needs.push-db-deploy-image.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      )
     runs-on: ubuntu-latest
     environment: production
 
@@ -385,22 +397,37 @@ jobs:
             # ensure the external network exists before compose tries to attach to it
             docker network create app-network || true
             force_deploy="${{ github.event.inputs.force_deploy }}"
-            # pull only changed services to minimize update time, or all if force
+
+            # ── Schema migration (one-shot; run explicitly before app services) ──
+            # Pulling db-deploy separately means a missing image never blocks app services.
+            run_db_deploy=false
+            if [ "${{ needs.detect-changes.outputs.database }}" = "true" ] || [ "$force_deploy" = "true" ]; then
+              if docker compose -f docker-compose.vps.yml pull db-deploy; then
+                run_db_deploy=true
+              else
+                echo "⚠️  db-deploy image not yet available on registry; skipping schema migration this run"
+              fi
+            fi
+            if [ "$run_db_deploy" = "true" ]; then
+              docker compose -f docker-compose.vps.yml run --rm db-deploy
+              echo "✅ Schema migration complete"
+            fi
+
+            # ── Application services ──
             pull_targets=""
             if [ "${{ needs.detect-changes.outputs.angular }}" = "true" ]; then pull_targets+=" angular-ui"; fi
             if [ "${{ needs.detect-changes.outputs.dotnet }}" = "true" ]; then pull_targets+=" dotnet-api"; fi
             if [ "${{ needs.detect-changes.outputs.flask }}" = "true" ]; then pull_targets+=" flask-api"; fi
-            if [ "${{ needs.detect-changes.outputs.database }}" = "true" ]; then pull_targets+=' db-deploy'; fi
             if [ "$force_deploy" = "true" ] || [ -n "$pull_targets" ]; then
               if [ "$force_deploy" = "true" ]; then
-                docker compose -f docker-compose.vps.yml pull dotnet-api flask-api angular-ui db-deploy
+                docker compose -f docker-compose.vps.yml pull dotnet-api flask-api angular-ui
               else
                 docker compose -f docker-compose.vps.yml pull $pull_targets
               fi
             else
               echo "No service changes detected; skipping pull."
             fi
-            docker compose -f docker-compose.vps.yml up -d --force-recreate
+            docker compose -f docker-compose.vps.yml up -d --force-recreate dotnet-api flask-api angular-ui
             docker image prune -f
             echo "✅ Deployed commit ${{ github.sha }}"
 
