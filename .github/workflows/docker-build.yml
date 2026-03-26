@@ -6,6 +6,13 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deploy all services regardless of changes'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: docker.io
@@ -78,7 +85,7 @@ jobs:
   # Build images
   build:
     needs: [security-scan, detect-changes]
-    if: ${{ needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
     runs-on: ubuntu-latest
     environment: production
     strategy:
@@ -131,7 +138,8 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Build and push ${{ matrix.service }}
-        if: ${{ (matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') || (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') || (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || ((matrix.service == 'angular-ui' && needs.detect-changes.outputs.angular == 'true') || (matrix.service == 'dotnet-api' && needs.detect-changes.outputs.dotnet == 'true') || (matrix.service == 'flask-api' && needs.detect-changes.outputs.flask == 'true')) }}
+        uses: docker/build-push-action@v5
         uses: docker/build-push-action@v5
         with:
           context: ./src/${{ matrix.service }}
@@ -156,7 +164,7 @@ jobs:
   # Scan images for vulnerabilities
   scan-images:
     needs: [build, detect-changes]
-    if: ${{ github.event_name == 'push' && (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true') }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || (needs.detect-changes.outputs.angular == 'true' || needs.detect-changes.outputs.dotnet == 'true' || needs.detect-changes.outputs.flask == 'true')) }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -171,7 +179,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Scan .NET API image
-        if: needs.detect-changes.outputs.dotnet == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.dotnet == 'true' }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
@@ -181,14 +189,14 @@ jobs:
           severity: 'HIGH,CRITICAL'
       
       - name: Upload .NET SARIF
-        if: needs.detect-changes.outputs.dotnet == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.dotnet == 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-dotnet.sarif'
           category: 'trivy-dotnet'
 
       - name: Scan Flask API image
-        if: needs.detect-changes.outputs.flask == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.flask == 'true' }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
@@ -198,14 +206,14 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Upload Flask SARIF
-        if: needs.detect-changes.outputs.flask == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.flask == 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-flask.sarif'
           category: 'trivy-flask'
 
       - name: Scan Angular UI image
-        if: needs.detect-changes.outputs.angular == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.angular == 'true' }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
@@ -215,7 +223,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Upload Angular SARIF
-        if: needs.detect-changes.outputs.angular == 'true'
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.force_deploy == 'true') || needs.detect-changes.outputs.angular == 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-angular.sarif'
@@ -266,7 +274,7 @@ jobs:
   # Deploy to VPS
   deploy:
     needs: [build, detect-changes]
-    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: production
 
@@ -294,13 +302,18 @@ jobs:
           script: |
             set -e
             cd /home/deploy/IRS
-            # pull only changed services to minimize update time
+            force_deploy="${{ github.event.inputs.force_deploy }}"
+            # pull only changed services to minimize update time, or all if force
             pull_targets=""
             if [ "${{ needs.detect-changes.outputs.angular }}" = "true" ]; then pull_targets+=" angular-ui"; fi
             if [ "${{ needs.detect-changes.outputs.dotnet }}" = "true" ]; then pull_targets+=" dotnet-api"; fi
             if [ "${{ needs.detect-changes.outputs.flask }}" = "true" ]; then pull_targets+=" flask-api"; fi
-            if [ -n "$pull_targets" ]; then
-              docker compose -f docker-compose.vps.yml pull $pull_targets
+            if [ "$force_deploy" = "true" ] || [ -n "$pull_targets" ]; then
+              if [ "$force_deploy" = "true" ]; then
+                docker compose -f docker-compose.vps.yml pull dotnet-api flask-api angular-ui
+              else
+                docker compose -f docker-compose.vps.yml pull $pull_targets
+              fi
             else
               echo "No service changes detected; skipping pull."
             fi
@@ -311,7 +324,7 @@ jobs:
   # Deploy dev stack to VPS on push to develop
   deploy-dev:
     needs: build
-    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: production
 
@@ -359,7 +372,7 @@ jobs:
   # Notify on success
   notify:
     needs: [security-scan, build, deploy, deploy-dev]
-    if: always() && github.event_name == 'push' && needs.build.result == 'success'
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.build.result == 'success'
     runs-on: ubuntu-latest
     
     steps:
