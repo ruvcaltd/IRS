@@ -19,6 +19,10 @@ services:
   dotnet-api:
     image: eshivakant/irs-dotnet-api:latest
     container_name: dotnet-api
+    restart: unless-stopped
+    depends_on:
+      db-deploy:
+        condition: service_completed_successfully
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_URLS: "http://0.0.0.0:8080"
@@ -56,6 +60,10 @@ services:
   flask-api:
     image: eshivakant/irs-flask-api:latest
     container_name: flask-api
+    restart: unless-stopped
+    depends_on:
+      db-deploy:
+        condition: service_completed_successfully
     environment:
       FLASK_ENV: "production"
       DB_CONNECTION_STRING: "Driver={ODBC Driver 18 for SQL Server};Server=mssql;Database=${DB_NAME};Uid=sa;Pwd=${SA_PASSWORD};TrustServerCertificate=yes;"
@@ -80,6 +88,7 @@ services:
   angular-ui:
     image: eshivakant/irs-angular-ui:latest
     container_name: angular-ui
+    restart: unless-stopped
     networks:
       - app-network
     labels:
