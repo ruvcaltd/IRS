@@ -21,17 +21,20 @@ public class RestApiAgentRunnerHostedService : BackgroundService
     private readonly IServiceProvider _services;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IEncryptionService _encryptionService;
+    private readonly IConfiguration _configuration;
 
     public RestApiAgentRunnerHostedService(
         ILogger<RestApiAgentRunnerHostedService> logger,
         IServiceProvider services,
         IHttpClientFactory httpClientFactory,
-        IEncryptionService encryptionService)
+        IEncryptionService encryptionService,
+        IConfiguration configuration)
     {
         _logger = logger;
         _services = services;
         _httpClientFactory = httpClientFactory;
         _encryptionService = encryptionService;
+        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -217,9 +220,12 @@ public class RestApiAgentRunnerHostedService : BackgroundService
 
         try
         {
+            var flaskApiBaseUrl = _configuration["FlaskApi:BaseUrl"] ?? string.Empty;
+
             // Step 1: Fetch data from REST API endpoint
             // Replace placeholders in endpoint URL with actual values
             var processedUrl = agent.endpoint_url
+                .Replace("{{flask_api_base_url}}", flaskApiBaseUrl)
                 .Replace("{{ticker}}", page.security_figiNavigation?.ticker ?? "")
                 .Replace("{{figi}}", page.security_figi ?? "")
                 .Replace("{{name}}", page.security_figiNavigation?.name ?? "");
@@ -263,10 +269,13 @@ public class RestApiAgentRunnerHostedService : BackgroundService
                     throw new InvalidOperationException("login_endpoint_url is required for UsernamePassword authentication");
                 }
 
-                log.AppendLine($"Authenticating with UsernamePassword at: {agent.login_endpoint_url}");
+                var processedLoginUrl = agent.login_endpoint_url
+                    .Replace("{{flask_api_base_url}}", flaskApiBaseUrl);
+
+                log.AppendLine($"Authenticating with UsernamePassword at: {processedLoginUrl}");
 
                 var password = _encryptionService.Decrypt(agent.password);
-                var loginRequest = new HttpRequestMessage(HttpMethod.Post, agent.login_endpoint_url);
+                var loginRequest = new HttpRequestMessage(HttpMethod.Post, processedLoginUrl);
 
                 var loginPayload = new
                 {
