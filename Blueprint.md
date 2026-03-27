@@ -20,7 +20,39 @@
 
 ## 1. Architecture Overview
 
-The application is composed of **five Docker containers** running on a shared Docker bridge network (`app-network`). All inter-container communication uses Docker's internal DNS (service names as hostnames). The Angular UI communicates with both APIs directly (no reverse proxy); CORS is configured on both APIs.
+The application uses a **two-project model** in production. A separate **infrastructure project** (deployed first) owns Traefik, SQL Server, and the shared `app-network`. This project's containers join that network and self-register their Traefik routes via Docker labels.
+
+### Production Architecture (VPS)
+
+```
+                         Internet
+                            │ HTTPS :443
+                     ┌──────▼───────┐
+                     │   Traefik    │  ← infra project
+                     │ (Let's Encrypt│
+                     │  TLS-ALPN-01) │
+                     └──────┬───────┘
+                            │ app-network (Docker bridge)
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+   ┌──────▼──────┐  ┌───────▼──────┐  ┌──────▼──────┐
+   │ angular-ui  │  │  dotnet-api  │  │  flask-api  │
+   │ (nginx SPA) │  │  (.NET 9)    │  │  (Gunicorn) │
+   │  :80 internal│  │  :8080 intern│  │  :5001 intern│
+   └─────────────┘  └──────┬───────┘  └──────┬──────┘
+                           │ TCP 1433         │ TCP 1433
+                    ┌──────▼───────────────────▼──────┐
+                    │    mssql  ← infra project        │
+                    │  (SQL Server 2022 Developer)     │
+                    │         Port: 1433               │
+                    └─────────────────────────────────┘
+
+  Traefik routing rules (via Docker labels on this project's containers):
+  • HTTPS /      → angular-ui:80
+  • HTTPS /api   → dotnet-api:8080
+```
+
+### Local Development Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -28,10 +60,10 @@ The application is composed of **five Docker containers** running on a shared Do
 │                                                                     │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐           │
 │  │  angular-ui   │   │  dotnet-api  │   │  flask-api   │           │
-│  │  (Nginx/ng)   │   │  (.NET 9)    │   │  (Gunicorn)  │           │
+│  │  (ng serve)   │   │  (.NET 9)    │   │  (Gunicorn)  │           │
 │  │  Port: 4203   │   │  Port: 5000  │   │  Port: 5001  │           │
 │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘           │
-│         │  HTTP             │  TCP 1433         │  TCP 1433         │
+│         │  HTTP (CORS)      │  TCP 1433         │  TCP 1433         │
 │         │                   │                   │                   │
 │         │            ┌──────┴───────────────────┴──────┐           │
 │         │            │         sqlserver               │           │
@@ -46,10 +78,10 @@ The application is composed of **five Docker containers** running on a shared Do
 │         │            └────────────────────────────────┘           │
 │                                                                     │
 │  Communication Paths:                                               │
-│  • Angular  →  .NET API   (HTTP, NSwag-generated client)           │
-│  • Angular  →  Flask API  (HTTP, service wrapper or generated)     │
+│  • Angular  →  .NET API   (HTTP+CORS, NSwag-generated client)      │
+│  • Angular  →  Flask API  (HTTP+CORS, service wrapper)             │
 │  • .NET API →  Flask API  (HTTP, http://flask-api:5001)            │
-│  • Flask API → .NET API   (HTTP, http://dotnet-api:5000)          │
+│  • Flask API → .NET API   (HTTP, http://dotnet-api:8080)           │
 │  • .NET API →  SQL Server (TCP, connection string)                 │
 │  • Flask API → SQL Server (TCP, pyodbc connection string)          │
 └─────────────────────────────────────────────────────────────────────┘
@@ -59,13 +91,14 @@ The application is composed of **five Docker containers** running on a shared Do
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Database edition | SQL Server Express 2022 | Free for production (10 GB/db, 1 GB RAM, 4 cores) |
+| Database edition | SQL Server 2022 Developer (VPS infra) / Express (local dev) | Infra project manages production DB; Express is free for local dev |
 | Schema management | SSDT (.sqlproj) dacpac | Declarative, state-based schema with diff-deploy |
 | ORM strategy | EF Core database-first | Schema owned by SSDT; entities auto-scaffolded |
 | API client generation | NSwag (RxJS mode) | Angular-idiomatic `Observable` return types |
 | Authentication | JWT Bearer tokens | .NET API issues tokens; Flask validates with shared secret |
-| Reverse proxy | None | CORS configured on both APIs; simpler setup |
+| Reverse proxy | Traefik (VPS infra project) | TLS termination + HTTP→HTTPS redirect; app containers register routes via Docker labels |
 | EF scaffold trigger | Docker build step | Reproducible, tied to exact container DB state |
+| SQL Server hostname | `sqlserver` (local), `mssql` (VPS) | Local dev owns the container; VPS uses the infra project's `mssql` container |
 
 ---
 
@@ -158,7 +191,15 @@ The application is composed of **five Docker containers** running on a shared Do
 
 ## 3. Docker Compose Definition
 
-### `docker-compose.yml`
+There are multiple compose files for different environments:
+
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | Local development — includes its own `sqlserver` container |
+| `docker-compose.override.yml` | Dev overrides (hot-reload, port bindings) |
+| `docker-compose.vps.yml` | VPS production — no SQL Server (uses infra project's `mssql`), Traefik labels on app containers, `app-network` is `external: true` |
+
+### `docker-compose.yml` (Local Development)
 
 ```yaml
 version: "3.9"
@@ -292,9 +333,6 @@ networks:
 
 ### `docker-compose.override.yml` (Development)
 
-```yaml
-version: "3.9"
-
 services:
   dotnet-api:
     build:
@@ -320,14 +358,41 @@ services:
     command: ["npx", "ng", "serve", "--host", "0.0.0.0", "--poll", "2000"]
 ```
 
-### SQL Server Express Limitations
+### SQL Server Express Limitations (local dev only)
 
-> **Important**: SQL Server Express 2022 is free for production but has hard limits:
+> **Note**: In VPS production, SQL Server is managed by the separate infrastructure project (`mssql` container). The SQL Server Express container in `docker-compose.yml` is for local development only.
+
+> **Local dev limits** — SQL Server Express 2022 is free but has hard limits:
 > - **10 GB** maximum database size
 > - **1 GB** maximum RAM usage
 > - **4 CPU cores** maximum
 >
-> If you exceed these limits, consider upgrading to SQL Server Standard (`MSSQL_PID=Standard`) which requires a paid license key via `MSSQL_PID=<your-product-key>`.
+> If you exceed these limits locally, consider upgrading to SQL Server Standard (`MSSQL_PID=Standard`) with a paid license.
+
+### VPS — Traefik Label Pattern
+
+In `docker-compose.vps.yml`, app containers self-register their routes with Traefik via Docker labels. Example for `dotnet-api`:
+
+```yaml
+  dotnet-api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.irs-api.rule=Host(`yourdomain.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.irs-api.entrypoints=websecure"
+      - "traefik.http.routers.irs-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.irs-api.loadbalancer.server.port=8080"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true    # Owned by the infra project; must be running before this stack starts
+```
+
+Key rules:
+- `traefik.enable=true` is **required** — the infra project sets `exposedByDefault: false`
+- No host port bindings (`ports:`) are needed on app containers; Traefik routes traffic internally
+- `app-network` must be declared `external: true` — it is created and owned by the infra project
 
 ---
 
@@ -1056,18 +1121,20 @@ CMD ["npx", "ng", "serve", "--host", "0.0.0.0", "--poll", "2000"]
 
 ### Communication Matrix
 
-| From | To | URL (Dev) | URL (Docker Internal) | Protocol |
-|---|---|---|---|---|
-| Angular UI | .NET API | `http://localhost:5000` | N/A (browser-based) | HTTP/REST |
-| Angular UI | Flask API | `http://localhost:5001` | N/A (browser-based) | HTTP/REST |
-| .NET API | Flask API | N/A | `http://flask-api:5001` | HTTP/REST |
-| Flask API | .NET API | N/A | `http://dotnet-api:8080` | HTTP/REST |
-| .NET API | SQL Server | N/A | `sqlserver,1433` | TCP/TDS |
-| Flask API | SQL Server | N/A | `sqlserver,1433` | TCP/ODBC |
+| From | To | URL (Local Dev) | URL (VPS via Traefik) | URL (Docker Internal) | Protocol |
+|---|---|---|---|---|---|
+| Browser | .NET API | `http://localhost:5000` | `https://yourdomain.com/api` | N/A | HTTP/HTTPS |
+| Browser | Flask API | `http://localhost:5001` | `https://yourdomain.com/pyapi` | N/A | HTTP/HTTPS |
+| .NET API | Flask API | N/A | N/A | `http://flask-api:5001` | HTTP/REST |
+| Flask API | .NET API | N/A | N/A | `http://dotnet-api:8080` | HTTP/REST |
+| .NET API | SQL Server | N/A | N/A | `sqlserver,1433` (local) / `mssql,1433` (VPS) | TCP/TDS |
+| Flask API | SQL Server | N/A | N/A | `sqlserver,1433` (local) / `mssql,1433` (VPS) | TCP/ODBC |
+
+> **SQL Server hostname**: In local dev (`docker-compose.yml`) the container is named `sqlserver`. In VPS production (`docker-compose.vps.yml`) the infra project's container is named `mssql` — connection strings must use the correct hostname for each environment.
 
 ### CORS Configuration
 
-Since there is **no reverse proxy**, both APIs must configure CORS to allow the Angular origin.
+In **local development** (no reverse proxy), browsers talk directly to the API containers on exposed host ports, so CORS must be configured on both APIs. In **VPS production**, Traefik terminates TLS and routes requests internally — CORS still applies for cross-origin browser requests but the origins are the production domain.
 
 **.NET API CORS** (in `Program.cs`):
 
@@ -1077,7 +1144,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAngular", policy =>
     {
         policy.WithOrigins(
-                "http://localhost:4203"    // Angular dev server
+                "http://localhost:4203",       // Angular dev server
+                "https://yourdomain.com"       // VPS production origin
               )
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -1089,7 +1157,7 @@ builder.Services.AddCors(options =>
 **Flask API CORS** (in `app/__init__.py`):
 
 ```python
-CORS(app, origins=["http://localhost:4203"], supports_credentials=True)
+CORS(app, origins=["http://localhost:4203", "https://yourdomain.com"], supports_credentials=True)
 ```
 
 ### Inter-API Communication
@@ -1431,8 +1499,10 @@ export const environment = {
 ```typescript
 export const environment = {
   production: true,
-  apiBaseUrl: '/api',           // Or the production API URL
-  flaskApiBaseUrl: '/pyapi',    // Or the production Flask URL
+  // Traefik routes /api → dotnet-api:8080 and /pyapi → flask-api:5001
+  // so relative paths work when the SPA is served from the same domain
+  apiBaseUrl: '/api',
+  flaskApiBaseUrl: '/pyapi',
 };
 ```
 

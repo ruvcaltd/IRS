@@ -199,10 +199,14 @@ spec:
 
 | Service | Port | Access | Protocol |
 |---------|------|--------|----------|
-| .NET API | 5000 | Load Balancer | HTTP/HTTPS |
-| Flask API | 5001 | Load Balancer | HTTP/HTTPS |
-| Angular UI | 80 | Public | HTTP/HTTPS |
-| SQL Server | 1433 | Internal Only | TDS |
+| Traefik (infra project) | 80, 443 | Public | HTTP/HTTPS |
+| Traefik dashboard (infra project) | 8080 | Internal only | HTTP |
+| .NET API | — | Via Traefik only (`/api/*`) | HTTPS |
+| Flask API | — | Internal only (dotnet-api → flask-api) | HTTP |
+| Angular UI | — | Via Traefik only | HTTPS |
+| SQL Server (`mssql`, infra project) | 1433 | Internal only | TDS |
+
+No app container (dotnet-api, flask-api, angular-ui) exposes ports directly to the host in the VPS deployment. All public traffic enters through Traefik.
 
 ### Network Policies (Kubernetes)
 

@@ -4,10 +4,26 @@ A sample implementation demonstrating a multi-service architecture with Angular 
 
 ## Architecture
 
-- **Angular UI** (Port 4203) - Frontend application
-- **.NET Core API** (Port 5000) - Main API service
-- **Flask API** (Port 5001) - Python microservice
-- **SQL Server Express** (Port 1433) - Database
+The VPS is split into two Docker Compose projects:
+
+- **Infrastructure project** (separate repo): Traefik (reverse proxy + SSL), SQL Server (`mssql`), PostgreSQL, Kafka, Redis, and the shared `app-network`
+- **This project**: `dotnet-api`, `flask-api`, `angular-ui` — app containers that join `app-network` and self-register routes into Traefik via Docker labels
+
+Traffic flow on the VPS:
+```
+Browser → Cloudflare (proxied) → Traefik :443
+  ├── /api/* → dotnet-api:8080  (.NET Core API)
+  └── /*     → angular-ui:80   (Angular SPA via nginx)
+```
+
+### Local development services
+
+| Service | URL |
+|---|---|
+| Angular UI | http://localhost:4200 |
+| .NET API | http://localhost:5000 |
+| Flask API | http://localhost:5001 |
+| SQL Server | `localhost,1433` |
 
 ## Features
 

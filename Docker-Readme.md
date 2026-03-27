@@ -28,15 +28,30 @@ This document explains every Dockerfile and Docker Compose file in the project, 
 
 ## Container Overview
 
+### Infra project containers (separate repo — shared on VPS)
+
+These containers are **not** managed by this project. They are prerequisites that must already be running.
+
+| Container | Image | Exposes (host) | Purpose |
+|---|---|---|---|
+| `traefik` | `traefik:latest` | `80`, `443`, `8080` | Reverse proxy, SSL termination, HTTP→HTTPS redirect |
+| `mssql` | MCR SQL Server 2022 | `1433` | SQL Server database |
+| `postgres` | `postgres:15` | — | PostgreSQL database |
+| `kafka` | Confluent Kafka | `9092` | Message broker |
+| `redis` | `redis:7` | `6379` | Cache / session store |
+
+### This project's containers
+
 | Container | Image source | Exposes (host) | Internal port | Purpose |
 |---|---|---|---|---|
-| `sqlserver` | MCR official | `1433` | `1433` | SQL Server Express 2022 database |
-| `db-deploy` | Built locally | — | — | One-shot: deploys SSDT dacpac schema to SQL Server |
-| `dotnet-api` | Built / pulled | `5000` | `8080` | ASP.NET Core 9 REST API |
-| `flask-api` | Built / pulled | `5001` | `5001` | Python Flask API (Yahoo Finance, AI agents) |
-| `angular-ui` | Built / pulled | `80`, `443` | `80`, `443` | Angular SPA + nginx reverse proxy |
+| `db-deploy` | Built locally / pulled | — | — | One-shot: deploys SSDT dacpac schema to `mssql` |
+| `dotnet-api` | Built / pulled | — (Traefik routes) | `8080` | ASP.NET Core 9 REST API |
+| `flask-api` | Built / pulled | — | `5001` | Python Flask API (Yahoo Finance, AI agents) |
+| `angular-ui` | Built / pulled | — (Traefik routes) | `80` | Angular SPA served via nginx |
 
-All containers are connected to a single Docker bridge network called `app-network`. They communicate with each other using container names as hostnames (e.g. `http://dotnet-api:8080`, `http://flask-api:5001`).
+All app containers join the `app-network` Docker bridge network (created and owned by the infra project, declared `external: true` here). Containers communicate using container names as hostnames (e.g. `http://dotnet-api:8080`, `http://flask-api:5001`, `Server=mssql`).
+
+Traefik discovers the `dotnet-api` and `angular-ui` routes automatically via Docker labels and routes HTTPS traffic accordingly. No host port mappings are needed on the app containers.
 
 ---
 
@@ -257,13 +272,27 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 **Key differences from `docker-compose.yml`:**
 - Uses **pre-built images from Docker Hub** (`image: eshivakant/irs-*:latest`) — does not build from source
-- No `db-deploy` service — schema is already deployed
+- No `sqlserver` service — SQL Server (`mssql`) is provided by the infra project
+- No `db-deploy` service — schema is already deployed via `db-deploy` which runs as a one-shot container during initial setup; re-run manually when schema changes
+- `app-network` is declared as `external: true` — must exist before this stack starts (created by infra project)
 - All secrets injected from the VPS `.env` file via `${VAR_NAME}` interpolation
 - CORS allowed origins explicitly set for the VPS IP and domain
-- Yahoo Finance / Flask credentials (`Yahoo_Fin_user`, `Yahoo_fin_secret`, `SECRET_KEY`) injected into flask-api
-- `angular-ui` exposes both `80` and `443`, and mounts `/etc/letsencrypt` from the VPS host
-- SQL Server exposes port `1433` on the host (for direct DB access if needed)
+- **Traefik labels** on `dotnet-api` and `angular-ui` register routes with the Traefik instance (infra project) — no host port mappings needed
 - No `depends_on` conditions (faster startup; health is managed by healthchecks)
+
+**How Traefik routing is registered:**
+
+```
+Container starts → Docker daemon notifies Traefik
+  │  (Traefik watches /var/run/docker.sock)
+  ▼
+Traefik reads labels:
+  traefik.http.routers.irs-api.rule=Host(`irs.ruvca-investments.com`) && PathPrefix(`/api`)
+  traefik.http.services.irs-api.loadbalancer.server.port=8080
+  │
+  ▼
+Traefik creates router: HTTPS /api/* → dotnet-api:8080
+```
 
 **How secrets flow:**
 
@@ -284,70 +313,38 @@ Container environment variables
 **Path:** `src/angular-ui/nginx.conf`  
 **Baked into:** the production `angular-ui` Docker image at `/etc/nginx/conf.d/default.conf`
 
+In the current architecture, **nginx only serves the Angular SPA static files on port 80** inside the container. SSL termination and HTTP→HTTPS redirect are handled externally by Traefik (infra project) before traffic ever reaches nginx.
+
 ```nginx
-# HTTP server — redirects to HTTPS in production
+# HTTP only — Traefik handles HTTPS and redirect externally
 server {
     listen 80;
     server_name localhost irs.ruvca-investments.com;
-
-    # Redirect to HTTPS if accessed via the real domain
-    if ($host = irs.ruvca-investments.com) {
-        return 301 https://$host$request_uri;
-    }
-
-    # Angular SPA
     root /usr/share/nginx/html;
     index index.html;
 
-    location / {
-        try_files $uri $uri/ /index.html;   # SPA fallback — all routes → index.html
-    }
-
-    # Proxy API calls to dotnet-api
-    location /api {
-        proxy_pass http://dotnet-api:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-
-# HTTPS server — production only
-server {
-    listen 443 ssl;
-    server_name irs.ruvca-investments.com;
-    root /usr/share/nginx/html;
-
-    ssl_certificate /etc/letsencrypt/live/irs.ruvca-investments.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/irs.ruvca-investments.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
+    # Angular SPA — all unmatched routes fall back to index.html
     location / {
         try_files $uri $uri/ /index.html;
-    }
-
-    location /api {
-        proxy_pass http://dotnet-api:8080;
-        ...
     }
 }
 ```
 
-**How API calls work:**
+> **Note:** The `/api` proxy block and the HTTPS (443) server block that existed in the old nginx config are now dead code in the VPS deployment. Traefik routes `/api/*` directly to `dotnet-api:8080` before the request reaches `angular-ui`. If you see those blocks in the baked image, they are harmless but unused — Traefik's routing rules take precedence.
+
+**How API calls work in production:**
 
 ```
 Browser → https://irs.ruvca-investments.com/api/v1/auth/login
   │
-  ▼ (same container — nginx resolves /api prefix)
-nginx in angular-ui container
-  │  proxy_pass http://dotnet-api:8080
+  ▼ (Traefik matches PathPrefix(`/api`) rule)
+Traefik (infra project)
+  │  routes to dotnet-api:8080
   ▼
 dotnet-api container (internal Docker network)
 ```
 
-The Angular app uses `apiBaseUrl: ''` (empty string in `environment.prod.ts`), so API calls go to `/api/...` which nginx proxies. This avoids any CORS issues — the browser sees all requests going to the same origin.
+The Angular app uses `apiBaseUrl: ''` (empty string in `environment.prod.ts`), so API calls go to `/api/...` — the same origin. Traefik splits the traffic at the edge: `/api/*` → `dotnet-api`, everything else → `angular-ui`.
 
 ---
 
@@ -449,47 +446,46 @@ GitHub Actions (.github/workflows/docker-build.yml)
 ## Network Architecture
 
 ```
-docker network: app-network (bridge)
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│  ┌─────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │  angular-ui │───▶│  dotnet-api │───▶│  flask-api │  │
-│  │  :80 / :443 │    │  :8080      │    │  :5001     │  │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬─────┘  │
-│         │ (proxy /api)     │                  │         │
-│         │                  └──────────────────┤         │
-│         │                                     ▼         │
-│         │                            ┌──────────────┐   │
-│         │                            │  sqlserver   │   │
-│         │                            │  :1433       │   │
-│         │                            └──────────────┘   │
-└─────────┼───────────────────────────────────────────────┘
-          │ (ports 80/443 exposed to host)
-          ▼
-      Internet / Browser
+Internet / Browser
+  │
+  ▼ (Cloudflare DNS proxy — Full SSL mode)
+VPS :80 / :443
+  │
+  ▼
+┌──────────────────────────────────────────────────────────────┐
+│  traefik container  (infra project)                          │
+│  :80  → HTTP catchall → redirect to HTTPS (dynamic.yml)      │
+│  :443 → TLS termination (Let's Encrypt auto-cert)            │
+│  :8080 → dashboard (internal only)                           │
+│                                                              │
+│  Routing rules (from Docker labels on app containers):       │
+│    Host(`irs…`) && PathPrefix(`/api`) → dotnet-api:8080      │
+│    Host(`irs…`)                       → angular-ui:80        │
+└──────────────────────────────┬───────────────────────────────┘
+                               │  docker network: app-network
+┌──────────────────────────────┼───────────────────────────────┐
+│                              │                               │
+│  ┌───────────────┐    ┌──────┴──────┐    ┌───────────────┐  │
+│  │  angular-ui   │    │  dotnet-api │    │   flask-api   │  │
+│  │  nginx :80    │    │  :8080      │───▶│   :5001       │  │
+│  └───────────────┘    └──────┬──────┘    └───────────────┘  │
+│                              │                               │
+│                              ▼                               │
+│                     ┌──────────────┐                         │
+│                     │    mssql     │  (infra project)        │
+│                     │    :1433     │                         │
+│                     └──────────────┘                         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Hostname resolution inside Docker:**  
 Containers reach each other by container name:
 - `http://dotnet-api:8080`
 - `http://flask-api:5001`
-- `Server=sqlserver;Port=1433`
+- `Server=mssql;Port=1433`
 
 **External access:**  
-Only `angular-ui` has ports exposed to the host. `dotnet-api` and `flask-api` are not directly reachable from outside — all traffic goes through nginx.
-
-### Shared SQL Network
-
-The SQL Server container is also attached to an external Docker network `shared-sql-network` for cross-stack connectivity.
-
-**Setup:**
-- Create the external network if it doesn't exist: `docker network create shared-sql-network`
-- The SQL Server is reachable from other containers on this network using the DNS name `sqlserver`
-- Connection string example: `Server=sqlserver;Database=YourDB;User Id=sa;Password=YourPassword;TrustServerCertificate=True;`
-
-**Verification:**
-- Check network attachment: `docker network inspect shared-sql-network`
-- Test connectivity from another container: `docker run --rm --network shared-sql-network mcr.microsoft.com/mssql/server:2022-latest sqlcmd -S sqlserver -U sa -P YourPassword -Q "SELECT @@VERSION"`
+No app container has ports exposed directly to the host. All inbound traffic enters through Traefik on ports 80/443. The Traefik dashboard is available internally on port 8080 (not exposed to the internet).
 
 ---
 
@@ -497,8 +493,7 @@ The SQL Server container is also attached to an external Docker network `shared-
 
 | Volume | Type | Used by | Purpose |
 |---|---|---|---|
-| `sqlserver-data` | Named Docker volume | `sqlserver` | Persists all database data across container restarts |
+| `sqlserver-data` | Named Docker volume | `sqlserver` (local dev only) | Persists all database data across container restarts |
 | `angular-ui-node-modules` | Named Docker volume (dev only) | `angular-ui` (dev) | Stores Linux npm binaries; prevents Windows host `node_modules` from overwriting them |
-| `/etc/letsencrypt` | Bind mount (VPS only) | `angular-ui` (prod) | Mounts Let's Encrypt certificates from VPS host into nginx container (read-only) |
 
-**Important:** The `sqlserver-data` volume is NOT deleted when you run `docker compose down`. You must explicitly run `docker compose down -v` to delete database data. On the VPS, never run `docker compose down -v` unless you want to wipe the database.
+**Note:** On the VPS, database persistence is handled by the infra project (named volume `mssql_data` on the `mssql` container). This project does not declare any persistent volumes for VPS use. Never run `docker compose down -v` in the infra project unless you want to wipe all database data.

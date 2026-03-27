@@ -1,7 +1,7 @@
 # Production Deployment Guide
 
-**Document Version:** 2.0  
-**Last Updated:** February 27, 2026  
+**Document Version:** 3.0  
+**Last Updated:** March 27, 2026  
 **Live URL:** https://irs.ruvca-investments.com
 
 ---
@@ -9,47 +9,88 @@
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [First-Time VPS Setup](#first-time-vps-setup)
-3. [GitHub Actions CI/CD Setup](#github-actions-cicd-setup)
-4. [SSL Certificate (Let's Encrypt)](#ssl-certificate-lets-encrypt)
-5. [Custom Domain via Cloudflare](#custom-domain-via-cloudflare)
-6. [Environment Variables Reference](#environment-variables-reference)
-7. [Ongoing Operations](#ongoing-operations)
-8. [Troubleshooting — Lessons Learned](#troubleshooting--lessons-learned)
+2. [Infrastructure Dependencies](#infrastructure-dependencies)
+3. [First-Time VPS Setup](#first-time-vps-setup)
+4. [GitHub Actions CI/CD Setup](#github-actions-cicd-setup)
+5. [SSL Certificate (Let's Encrypt)](#ssl-certificate-lets-encrypt)
+6. [Custom Domain via Cloudflare](#custom-domain-via-cloudflare)
+7. [Environment Variables Reference](#environment-variables-reference)
+8. [Ongoing Operations](#ongoing-operations)
+9. [Troubleshooting — Lessons Learned](#troubleshooting--lessons-learned)
 
 ---
 
 ## Architecture Overview
 
+The VPS is split into two independent Docker Compose projects:
+
+| Project | Owns | Location on VPS |
+|---|---|---|
+| **Infrastructure** (separate repo) | Traefik, SQL Server (`mssql`), PostgreSQL, Kafka, Redis, `app-network` | `/infra/` |
+| **IRS App** (this repo) | `dotnet-api`, `flask-api`, `angular-ui`, `db-deploy` | `/IRS/` |
+
 ```
 Browser
   │
   ▼
-Cloudflare (DNS proxy + SSL termination)
+Cloudflare (DNS proxy — Full SSL mode)
   │  HTTPS :443
   ▼
 VPS (185.249.73.172)
   │
-  ├── angular-ui container  :80 / :443
-  │     ├── serves Angular SPA static files
-  │     └── proxies /api/* → dotnet-api:8080
+  ▼
+Traefik :443  ← infra project
+  │  (terminates TLS, routes by Host + PathPrefix)
   │
-  ├── dotnet-api container  :8080 (internal), :5000 (host)
-  │     └── connects to flask-api:5001, sqlserver:1433
+  ├── Host(`irs.ruvca-investments.com`) && PathPrefix(`/api`)
+  │     └── dotnet-api:8080  ← this project
+  │           └── connects to flask-api:5001, mssql:1433
   │
-  ├── flask-api container   :5001
-  │     └── connects to sqlserver:1433, Yahoo Finance API
-  │
-  └── sqlserver container   :1433
-        └── persisted to named Docker volume: sqlserver-data
+  └── Host(`irs.ruvca-investments.com`)
+        └── angular-ui:80  ← this project
+              (serves Angular SPA static files)
 ```
 
-All containers communicate on a private Docker bridge network (`app-network`).
-Only `angular-ui` is exposed to the internet on ports 80/443.
+All containers — from both projects — share a single Docker bridge network called `app-network`, which is **created and owned by the infrastructure project**. This project declares it as `external: true`.
+
+HTTP→HTTPS redirect is handled globally by Traefik's dynamic config (`dynamic.yml`). SSL certificates are obtained and auto-renewed by Traefik via Let's Encrypt (TLS-ALPN-01 challenge). No manual cert management is required.
+
+---
+
+## Infrastructure Dependencies
+
+This project assumes the **infrastructure project is already running** on the same VPS before this stack is deployed.
+
+The infrastructure project must provide:
+- `app-network` Docker bridge network
+- `mssql` container (SQL Server 2022) reachable on `app-network` as hostname `mssql`
+- `traefik` container listening on ports `80` and `443`, watching `app-network` for Docker labels
+
+Verify infrastructure is ready before deploying:
+```bash
+# Network exists
+docker network inspect app-network
+
+# Traefik is running
+docker ps | grep traefik
+
+# SQL Server is healthy
+docker inspect mssql --format='{{.State.Health.Status}}'
+```
 
 ---
 
 ## First-Time VPS Setup
+
+### 0. Prerequisite: infrastructure project must be running
+
+Before deploying this project, the infrastructure project must already be up on the VPS with `app-network`, `mssql`, and `traefik` running. See the infrastructure project README for setup instructions.
+
+```bash
+# Confirm prerequisites
+docker network inspect app-network
+docker ps --filter name=traefik --filter name=mssql
+```
 
 ### 1. Create the working directory on the VPS
 
@@ -63,7 +104,7 @@ cd /IRS
 Run this **from your local machine** (Windows PowerShell or WSL):
 
 ```bash
-scp docker-compose.vps.yml docker-compose.yml .env root@185.249.73.172:/IRS
+scp docker-compose.vps.yml .env root@185.249.73.172:/IRS
 ```
 
 > **Important:** `.env` is gitignored and **must always be copied manually**. It is never committed to git.
@@ -77,13 +118,16 @@ docker compose -f docker-compose.vps.yml pull
 docker compose -f docker-compose.vps.yml up -d
 ```
 
-### 4. Verify all containers are healthy
+### 4. Verify all containers are healthy and routes are registered
 
 ```bash
 docker compose -f docker-compose.vps.yml ps
 docker logs dotnet-api --tail 20
 docker logs flask-api --tail 20
 docker logs angular-ui --tail 20
+
+# Confirm Traefik has picked up both routes
+curl http://localhost:8080/api/http/routers | python3 -m json.tool | grep -E 'name|rule'
 ```
 
 ---
@@ -142,56 +186,33 @@ The `.env` file still requires manual management.
 
 ## SSL Certificate (Let's Encrypt)
 
-SSL is terminated on the VPS inside the nginx (`angular-ui`) container using free Let's Encrypt certificates.
-The cert files live on the VPS host and are mounted as a read-only volume into the container.
+SSL is **fully managed by Traefik** (part of the infrastructure project) using Let's Encrypt with the TLS-ALPN-01 challenge. There are no cert files to manage manually, no certbot to install, and no cron jobs needed.
 
-### Issuing the certificate (first time only)
+Traefik stores the certificate in `acme.json` (a file volume inside the infrastructure project's directory on the VPS). Certificates **auto-renew** before expiry — Traefik handles this automatically in the background.
 
-> **Prerequisite:** The Cloudflare DNS A record for `irs.ruvca-investments.com` must be **grey cloud (DNS only / unproxied)** when running certbot. Certbot must be able to reach port 80 on the VPS directly to complete the ACME HTTP-01 challenge.
+The `certresolver=letsencrypt` label on both `dotnet-api` and `angular-ui` instructs Traefik to issue/use a Let's Encrypt cert for `irs.ruvca-investments.com`.
 
-```bash
-# Stop nginx to free port 80 for certbot's ACME challenge
-docker stop angular-ui
+### Important: Cloudflare must be grey cloud during initial cert issuance
 
-# Install certbot
-apt update && apt install -y certbot
+Traefik's TLS-ALPN-01 challenge requires a direct TLS connection to the VPS on port 443. If Cloudflare is proxying (orange cloud), it intercepts port 443 and the ACME challenge will fail.
 
-# Issue the certificate
-certbot certonly --standalone -d irs.ruvca-investments.com
+**Steps for first-time cert issuance:**
+1. Set the Cloudflare DNS record for `irs.ruvca-investments.com` to **grey cloud (DNS only / unproxied)**
+2. Start Traefik (infra project) and the app stack
+3. Wait ~30 seconds — Traefik will automatically request the cert on first HTTPS traffic
+4. Verify cert was issued: check Traefik dashboard at `http://<VPS_IP>:8080` → Certificates tab
+5. Switch Cloudflare DNS back to **orange cloud (Proxied)**
 
-# Fix permissions — certbot creates its dirs as mode 700 (root only).
-# The nginx process inside Docker runs as a non-root user and cannot read them.
-chmod 755 /etc/letsencrypt/live
-chmod 755 /etc/letsencrypt/archive
-chmod 755 /etc/letsencrypt/archive/irs.ruvca-investments.com
-chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
+For renewals, Traefik handles them automatically every ~60 days. No action needed.
 
-# Start nginx back up
-docker start angular-ui
-
-# Confirm it started cleanly — must see no [emerg] errors
-docker logs angular-ui --tail 10
-```
-
-### Certificate auto-renewal (cron)
-
-Let's Encrypt certificates expire every 90 days. This cron job renews them on the 1st of each month at 03:00:
+### Verify cert status
 
 ```bash
-echo "0 3 1 * * docker stop angular-ui && certbot renew --quiet && chmod 755 /etc/letsencrypt/live /etc/letsencrypt/archive /etc/letsencrypt/archive/irs.ruvca-investments.com && chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem && docker start angular-ui" | crontab -
+# Check Traefik ACME status via API
+curl -s http://localhost:8080/api/tls/certificates | python3 -m json.tool
 
-# Verify it was saved
-crontab -l
-```
-
-### Renewing manually
-
-```bash
-docker stop angular-ui
-certbot renew
-chmod 755 /etc/letsencrypt/live /etc/letsencrypt/archive /etc/letsencrypt/archive/irs.ruvca-investments.com
-chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
-docker start angular-ui
+# Or check the acme.json file (in infra project directory)
+jq '.letsencrypt.Certificates[] | {domain: .domain.main, expiry: .NotAfter}' /infra/traefik/acme.json
 ```
 
 ---
@@ -211,7 +232,7 @@ docker start angular-ui
 
 ### Cloudflare SSL/TLS mode
 
-After the cert is issued and nginx is running:
+After Traefik has issued the Let's Encrypt cert:
 
 1. Switch DNS record to **orange cloud (Proxied)**
 2. Go to **SSL/TLS → Overview**
@@ -221,10 +242,10 @@ After the cert is issued and nginx is running:
 |---|---|---|---|
 | Off | HTTP | HTTP | Never — insecure |
 | Flexible | HTTPS | HTTP | Only if no cert on VPS |
-| **Full** | HTTPS | HTTPS | ✅ Our setup — real cert on VPS |
+| **Full** | HTTPS | HTTPS | ✅ Our setup — Traefik has a real Let’s Encrypt cert |
 | Full (strict) | HTTPS | HTTPS | Requires specific CA chain |
 
-> Do **not** use Flexible when you have a real cert — it causes redirect loops (nginx redirects HTTP → HTTPS, Cloudflare sends HTTP, infinite loop).
+> Do **not** use Flexible when Traefik has a real cert — it causes redirect loops (Traefik redirects HTTP → HTTPS, Cloudflare sends HTTP, infinite loop).
 
 ### Per-subdomain SSL override (if primary domain needs different mode)
 
@@ -318,7 +339,9 @@ docker stats --no-stream
 docker logs angular-ui --tail 50 -f
 docker logs dotnet-api --tail 50 -f
 docker logs flask-api --tail 50 -f
-docker logs sqlserver --tail 50
+
+# Traefik logs (infra project)
+docker logs traefik --tail 50 -f
 ```
 
 ### Restart a single service
@@ -418,36 +441,39 @@ The agent record in the database stores an AES-encrypted password. When decrypte
 
 ---
 
-### nginx fails to start — SSL cert not found
+### Traefik route not appearing in dashboard
 
-**Symptom:**
-```
-[emerg] cannot load certificate ".../fullchain.pem": No such file or directory
-```
+**Symptom:** The `irs-api` or `irs-frontend` router is missing from `http://<VPS_IP>:8080/dashboard/`.
 
-**Cause:** certbot has not been run yet. The cert files don't exist at `/etc/letsencrypt/`.
-
-**Fix:** Run certbot (see [SSL Certificate](#ssl-certificate-lets-encrypt) section above).
-
----
-
-### nginx fails to start — Permission denied on cert
-
-**Symptom:**
-```
-[emerg] cannot load certificate ".../fullchain.pem": Permission denied
-```
-
-**Cause:** certbot creates `/etc/letsencrypt/live` and `/etc/letsencrypt/archive` with mode `700` (root-only). The nginx process inside Docker runs as a non-root user.
-
-**Fix:**
+**Check 1 — Container is actually running:**
 ```bash
-chmod 755 /etc/letsencrypt/live
-chmod 755 /etc/letsencrypt/archive
-chmod 755 /etc/letsencrypt/archive/irs.ruvca-investments.com
-chmod 644 /etc/letsencrypt/archive/irs.ruvca-investments.com/*.pem
-docker restart angular-ui
+docker ps | grep dotnet-api
+docker logs dotnet-api --tail 30
 ```
+If the container crashed, check whether the `dotnet-api` healthcheck is passing and whether `mssql` is reachable on `app-network`.
+
+**Check 2 — Container is on `app-network`:**
+```bash
+docker network inspect app-network | grep dotnet-api
+```
+If missing, the container isn't attached to the network Traefik is watching.
+
+**Check 3 — Labels are present:**
+```bash
+docker inspect dotnet-api --format='{{json .Config.Labels}}' | python3 -m json.tool
+```
+Expect to see `traefik.enable=true` and the router rule labels.
+
+**Check 4 — Traefik provider configuration (infra project):**
+In `traefik.yml`, confirm:
+```yaml
+providers:
+  docker:
+    network: app-network
+    exposedByDefault: false
+```
+
+> **Note:** The old `nginx fails to start — SSL cert not found` and `Permission denied on cert` errors no longer apply. SSL is handled entirely by Traefik in the infra project. The `angular-ui` nginx container only serves static files on port 80 inside Docker — there are no cert file mounts on it.
 
 ---
 
