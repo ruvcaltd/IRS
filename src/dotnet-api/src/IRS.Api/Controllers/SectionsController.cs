@@ -22,7 +22,7 @@ public class SectionsController : ControllerBase
 
     private int GetCurrentUserId()
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        var userIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
         return int.TryParse(userIdClaim?.Value, out var userId) ? userId : 0;
     }
 

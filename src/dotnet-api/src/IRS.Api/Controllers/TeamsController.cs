@@ -27,7 +27,9 @@ public class TeamsController : ControllerBase
     /// </summary>
     private int GetCurrentUserId()
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        // .NET 9 uses JsonWebTokenHandler which preserves raw JWT claim names ("sub").
+        // Fallback to ClaimTypes.NameIdentifier for environments using the legacy JwtSecurityTokenHandler.
+        var userIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
         return int.TryParse(userIdClaim?.Value, out var userId) ? userId : 0;
     }
 
